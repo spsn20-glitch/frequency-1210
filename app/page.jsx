@@ -10,20 +10,29 @@ const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabase
 const PASSCODE = "0507";
 const DISTANCE_KM = 1258;
 
-// Curated & Engaging Statuses
 const STATUS_PRESETS = [
-  { group: "Romantic & Cozy", items: ["Missing you tons 🥺", "Craving chai & your voice ☕", "Listening to our songs 🎧", "Winding down for bed 🌙", "Half asleep, send me a voice note 🥱"] },
-  { group: "Daily & Busy", items: ["Free to talk right now! 🎙️", "In a boring meeting, thinking of you 🤫", "Deep in work grind 💻", "Having delicious food 🍜", "Stuck in traffic 🛵", "Out with friends 🍕", "Working out 💪"] },
-];
-
-const DAILY_PROMPTS = [
-  "15-sec highlight of your day so far ✨",
-  "What were you doing at 4:00 PM today? 🕓",
-  "One random thing that made you smile today 😊",
-  "Sing or hum one line of a song stuck in your head 🎵",
-  "Mini rant or funniest moment from today 🗣️",
-  "First thing we're eating next time we meet 🍜",
-  "Describe your current mood in 10 seconds 🌙",
+  {
+    group: "Romantic & Cozy",
+    items: [
+      "Missing you tons 🥺",
+      "Craving chai & your voice ☕",
+      "Listening to our songs 🎧",
+      "Winding down for bed 🌙",
+      "Half asleep, send me a voice note 🥱",
+    ],
+  },
+  {
+    group: "Daily & Busy",
+    items: [
+      "Free to talk right now! 🎙️",
+      "In a boring meeting, thinking of you 🤫",
+      "Deep in work grind 💻",
+      "Having delicious food 🍜",
+      "Stuck in traffic 🛵",
+      "Out with friends 🍕",
+      "Working out 💪",
+    ],
+  },
 ];
 
 function decodeWeatherCode(code) {
@@ -39,7 +48,6 @@ function decodeWeatherCode(code) {
   return { icon: "🌤️", label: "Pleasant" };
 }
 
-// Convert Blob / File to Base64 (Fail-safe for cross-device media delivery)
 function fileToBase64(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -49,7 +57,27 @@ function fileToBase64(blob) {
   });
 }
 
-// Synthesized Walkie-Talkie Static Burst
+// Compress image file to a fast, lightweight Polaroid JPEG Data URL
+function compressImageToDataUrl(file, maxWidth = 600) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const scale = Math.min(1, maxWidth / img.width);
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.8));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function playRadioBurst(durationMs = 150) {
   if (typeof window === "undefined") return;
   try {
@@ -80,7 +108,6 @@ function playRadioBurst(durationMs = 150) {
   } catch (e) {}
 }
 
-// Synthesized 72 BPM Heartbeat Sound
 function playHeartbeatSound() {
   if (typeof window === "undefined") return;
   try {
@@ -133,7 +160,7 @@ export default function WalkieTalkieApp() {
     greno: { station_id: "greno", display_name: "Jaai • GreNo", city: "Greater Noida", current_mood: "Free to talk right now! 🎙️", heart_active: false },
   });
 
-  // Messages (Transmissions)
+  // Transmissions
   const [tapes, setTapes] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [activeTab, setActiveTab] = useState("tape"); // 'tape' | 'polaroid'
@@ -143,17 +170,19 @@ export default function WalkieTalkieApp() {
   const [customStatusInput, setCustomStatusInput] = useState("");
   const [viewSentArchive, setViewSentArchive] = useState(false);
 
-  // Composer
+  // Recording & Composer State
   const [isRecording, setIsRecording] = useState(false);
   const [recSeconds, setRecSeconds] = useState(0);
   const [noteText, setNoteText] = useState("");
-  const [polaroidFile, setPolaroidFile] = useState(null);
-  const [polaroidPreview, setPolaroidPreview] = useState("");
-  const [isPromptAttached, setIsPromptAttached] = useState(false);
-  const [isTimeLockAttached, setIsTimeLockAttached] = useState(false);
+  const [polaroidDataUrl, setPolaroidDataUrl] = useState("");
+  const [deliveryMode, setDeliveryMode] = useState("instant"); // 'instant' | 'scheduled'
   const [unlockTimeStr, setUnlockTimeStr] = useState("23:30");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadNotice, setUploadNotice] = useState("");
+
+  // Live Camera Modal State
+  const [cameraModalOpen, setCameraModalOpen] = useState(false);
+  const [cameraFacing, setCameraFacing] = useState("user"); // 'user' | 'environment'
 
   // Presence & Biometric Sync
   const [partnerOnline, setPartnerOnline] = useState(false);
@@ -165,20 +194,18 @@ export default function WalkieTalkieApp() {
   const scratchCanvasRef = useRef(null);
   const audioPlayerRef = useRef(null);
   const mediaRecorderRef = useRef(null);
+  const mediaStreamRef = useRef(null);
+  const isRecordingCancelledRef = useRef(false);
   const audioChunksRef = useRef([]);
   const recTimerRef = useRef(null);
   const presenceChannelRef = useRef(null);
+  const cameraVideoRef = useRef(null);
+  const cameraStreamRef = useRef(null);
 
   const partnerStation = myStation === "bbi" ? "greno" : "bbi";
   const myName = myStation === "bbi" ? "Sarthak" : "Jaai";
   const partnerName = myStation === "bbi" ? "Jaai" : "Sarthak";
 
-  const todayPrompt = useMemo(() => {
-    const dayIndex = new Date().getDate() % DAILY_PROMPTS.length;
-    return DAILY_PROMPTS[dayIndex];
-  }, []);
-
-  // Check stored auth
   useEffect(() => {
     const savedPin = localStorage.getItem("freq1210_pin");
     const savedStation = localStorage.getItem("freq1210_station");
@@ -204,7 +231,7 @@ export default function WalkieTalkieApp() {
     }
   };
 
-  // Live Weather Fetching
+  // Weather Fetching
   useEffect(() => {
     async function fetchDetailedWeather() {
       try {
@@ -236,7 +263,7 @@ export default function WalkieTalkieApp() {
     fetchDetailedWeather();
   }, []);
 
-  // Supabase Data & Realtime Sync
+  // Supabase Realtime Sync
   useEffect(() => {
     if (!unlocked || !supabase) return;
 
@@ -355,12 +382,11 @@ export default function WalkieTalkieApp() {
     };
   }, [myThumbDown, partnerThumbDown]);
 
-  // Incoming Messages from Partner
+  // Filter Incoming vs Sent
   const incomingTapes = useMemo(() => {
     return tapes.filter((t) => t.sender !== myStation);
   }, [tapes, myStation]);
 
-  // Sent Messages by You
   const sentTapes = useMemo(() => {
     return tapes.filter((t) => t.sender === myStation);
   }, [tapes, myStation]);
@@ -371,11 +397,11 @@ export default function WalkieTalkieApp() {
   }, [tapes]);
 
   const currentTape = incomingTapes[currentIndex] || null;
-  const isUnreadPartnerTape = Boolean(currentTape && !currentTape.is_listened);
+  const isUnreadPartnerTape = Boolean(currentTape && currentTape.is_listened === false);
 
-  // Check Lock Status
+  // Check Time Lock Status Only (Two-way unlock removed)
   const lockStatus = useMemo(() => {
-    if (!currentTape) return { locked: false, reason: "" };
+    if (!currentTape || !currentTape.unlock_at) return { locked: false, reason: "" };
 
     const unlockMs = new Date(currentTape.unlock_at).getTime();
     if (unlockMs > nowTs) {
@@ -390,21 +416,8 @@ export default function WalkieTalkieApp() {
       };
     }
 
-    if (currentTape.require_reply_unlock) {
-      const tapeSentTime = new Date(currentTape.created_at).getTime();
-      const iRepliedAfter = sentTapes.some(
-        (t) => new Date(t.created_at).getTime() > tapeSentTime
-      );
-      if (!iRepliedAfter) {
-        return {
-          locked: true,
-          reason: `Daily Prompt Lock! Record a reply below to unlock ${partnerName}'s tape.`,
-        };
-      }
-    }
-
     return { locked: false, reason: "" };
-  }, [currentTape, nowTs, sentTapes, partnerName]);
+  }, [currentTape, nowTs]);
 
   // Darkroom Scratch Canvas
   useEffect(() => {
@@ -525,10 +538,10 @@ export default function WalkieTalkieApp() {
         await audioPlayerRef.current.play();
         setIsPlaying(true);
       } catch (err) {
-        alert("Audio playback failed. Please tap again.");
+        alert("Audio playback failed. Please tap Play again.");
       }
 
-      if (!currentTape.is_listened) {
+      if (currentTape.is_listened === false) {
         setTapes((prev) =>
           prev.map((t) => (t.id === currentTape.id ? { ...t, is_listened: true } : t))
         );
@@ -539,12 +552,70 @@ export default function WalkieTalkieApp() {
     }
   };
 
-  // Push-to-Talk Recording
+  // -------------------------------------------------------------------------
+  // LIVE CAMERA CAPTURE FUNCTIONS
+  // -------------------------------------------------------------------------
+  const openLiveCamera = async (facing = cameraFacing) => {
+    setCameraModalOpen(true);
+    try {
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach((t) => t.stop());
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: facing },
+        audio: false,
+      });
+      cameraStreamRef.current = stream;
+      if (cameraVideoRef.current) {
+        cameraVideoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      alert("Could not access camera. Please allow camera permission or use Album.");
+      setCameraModalOpen(false);
+    }
+  };
+
+  const closeLiveCamera = () => {
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach((t) => t.stop());
+      cameraStreamRef.current = null;
+    }
+    setCameraModalOpen(false);
+  };
+
+  const flipCamera = () => {
+    const nextFacing = cameraFacing === "user" ? "environment" : "user";
+    setCameraFacing(nextFacing);
+    openLiveCamera(nextFacing);
+  };
+
+  const snapCameraPhoto = () => {
+    if (!cameraVideoRef.current) return;
+    const video = cameraVideoRef.current;
+    const canvas = document.createElement("canvas");
+    const maxW = 600;
+    const scale = Math.min(1, maxW / (video.videoWidth || 600));
+    canvas.width = Math.round((video.videoWidth || 600) * scale);
+    canvas.height = Math.round((video.videoHeight || 450) * scale);
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+    setPolaroidDataUrl(dataUrl);
+    if (navigator.vibrate) navigator.vibrate(40);
+    closeLiveCamera();
+  };
+
+  // -------------------------------------------------------------------------
+  // VOICE RECORDING WITH EXPLICIT "CANCEL" AND "SEND" BUTTONS
+  // -------------------------------------------------------------------------
   const startRecording = async () => {
     if (isRecording) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      playRadioBurst(140);
+      mediaStreamRef.current = stream;
+      isRecordingCancelledRef.current = false;
+      playRadioBurst(130);
+
       const mimeType = MediaRecorder.isTypeSupported("audio/mp4")
         ? "audio/mp4"
         : MediaRecorder.isTypeSupported("audio/webm")
@@ -558,8 +629,19 @@ export default function WalkieTalkieApp() {
       };
 
       recorder.onstop = async () => {
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+          mediaStreamRef.current = null;
+        }
+        // If user clicked Cancel, discard audio immediately and do NOT send
+        if (isRecordingCancelledRef.current) {
+          audioChunksRef.current = [];
+          setUploadNotice("Recording cancelled.");
+          setTimeout(() => setUploadNotice(""), 2500);
+          return;
+        }
+
         playRadioBurst(160);
-        stream.getTracks().forEach((track) => track.stop());
         const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
         await uploadAndSend(blob, recorder.mimeType || "audio/webm");
       };
@@ -574,23 +656,34 @@ export default function WalkieTalkieApp() {
     }
   };
 
-  const stopRecording = () => {
+  const cancelRecording = () => {
     if (!isRecording || !mediaRecorderRef.current) return;
+    isRecordingCancelledRef.current = true;
+    clearInterval(recTimerRef.current);
+    setIsRecording(false);
+    setRecSeconds(0);
+    mediaRecorderRef.current.stop();
+  };
+
+  const finishAndSendRecording = () => {
+    if (!isRecording || !mediaRecorderRef.current) return;
+    isRecordingCancelledRef.current = false;
     clearInterval(recTimerRef.current);
     setIsRecording(false);
     mediaRecorderRef.current.stop();
   };
 
-  // BULLETPROOF SEND: Storage first, with automatic Base64 fallback if storage bucket fails
+  // -------------------------------------------------------------------------
+  // SCHEMA-SAFE UPLOAD & DATABASE SAVE
+  // -------------------------------------------------------------------------
   const uploadAndSend = async (audioBlob, mimeType) => {
     setIsUploading(true);
     setUploadNotice("Encoding & transmitting across 1,258 KM...");
 
     try {
       let finalAudioUrl = "";
-      let finalPolaroidUrl = "";
 
-      // 1. Process Voice Note
+      // Try Supabase Storage first, fallback to Base64 data URL
       try {
         if (supabase) {
           const ext = mimeType.includes("mp4") ? "mp4" : "webm";
@@ -606,32 +699,13 @@ export default function WalkieTalkieApp() {
         }
       } catch (e) {}
 
-      // Fallback: If Supabase Storage failed/blocked, convert to Base64 data URI
       if (!finalAudioUrl) {
         finalAudioUrl = await fileToBase64(audioBlob);
       }
 
-      // 2. Process Polaroid
-      if (polaroidFile) {
-        try {
-          if (supabase) {
-            const imgName = `${myStation}-polaroid-${Date.now()}`;
-            const { error: imgErr } = await supabase.storage.from("polaroids").upload(imgName, polaroidFile);
-            if (!imgErr) {
-              const { data } = supabase.storage.from("polaroids").getPublicUrl(imgName);
-              finalPolaroidUrl = data.publicUrl;
-            }
-          }
-        } catch (e) {}
-
-        if (!finalPolaroidUrl) {
-          finalPolaroidUrl = await fileToBase64(polaroidFile);
-        }
-      }
-
-      // 3. Time Lock Calculation
+      // Calculate Unlock Timestamp if "Open After Time" is selected
       let unlockIso = new Date().toISOString();
-      if (isTimeLockAttached && unlockTimeStr) {
+      if (deliveryMode === "scheduled" && unlockTimeStr) {
         const [hh, mm] = unlockTimeStr.split(":").map(Number);
         const target = new Date();
         target.setHours(hh, mm, 0, 0);
@@ -641,34 +715,42 @@ export default function WalkieTalkieApp() {
         unlockIso = target.toISOString();
       }
 
-      // 4. Save into Database
-      const newRow = {
+      const fullRow = {
         sender: myStation,
         audio_url: finalAudioUrl,
         duration_sec: Math.max(recSeconds, 1),
         note_text: noteText.trim() || null,
-        polaroid_url: finalPolaroidUrl || null,
+        polaroid_url: polaroidDataUrl || null,
         polaroid_developed: false,
         unlock_at: unlockIso,
-        require_reply_unlock: isPromptAttached,
-        prompt_text: isPromptAttached ? todayPrompt : null,
         is_listened: false,
       };
 
       if (supabase) {
-        const { error: dbErr } = await supabase.from("transmissions").insert([newRow]);
+        const { error: dbErr } = await supabase.from("transmissions").insert([fullRow]);
+
+        // Auto-retry with minimal base columns if any newer column is missing in Supabase
         if (dbErr) {
-          alert(`Transmission error: ${dbErr.message}`);
-          return;
+          const minimalRow = {
+            sender: myStation,
+            audio_url: finalAudioUrl,
+            duration_sec: Math.max(recSeconds, 1),
+            note_text: noteText.trim() || null,
+            polaroid_url: polaroidDataUrl || null,
+            unlock_at: unlockIso,
+          };
+          const { error: retryErr } = await supabase.from("transmissions").insert([minimalRow]);
+          if (retryErr) {
+            alert(`Transmission error: ${retryErr.message}`);
+            return;
+          }
         }
       }
 
-      // Success Reset
+      // Reset Composer
       setNoteText("");
-      setPolaroidFile(null);
-      setPolaroidPreview("");
-      setIsPromptAttached(false);
-      setIsTimeLockAttached(false);
+      setPolaroidDataUrl("");
+      setDeliveryMode("instant");
       setUploadNotice(`✓ Sent directly to ${partnerName}'s radio!`);
       setTimeout(() => setUploadNotice(""), 4500);
     } catch (err) {
@@ -838,7 +920,6 @@ export default function WalkieTalkieApp() {
           </div>
 
           <div style={styles.citiesGrid}>
-            {/* SARTHAK - BHUBANESWAR */}
             <div style={{ ...styles.cityBox, borderColor: myStation === "bbi" ? "#a855f7" : "#2e1759" }}>
               <div style={styles.cityHeaderLine}>
                 <span style={styles.cityTitle}>Sarthak • BBI</span>
@@ -857,7 +938,6 @@ export default function WalkieTalkieApp() {
 
             <div style={styles.cityDivider}>↔</div>
 
-            {/* JAAI - GREATER NOIDA */}
             <div style={{ ...styles.cityBox, borderColor: myStation === "greno" ? "#a855f7" : "#2e1759" }}>
               <div style={styles.cityHeaderLine}>
                 <span style={styles.cityTitle}>Jaai • GreNo</span>
@@ -875,14 +955,15 @@ export default function WalkieTalkieApp() {
             </div>
           </div>
 
-          {/* OPEN STATUS SHEET BUTTON */}
           <button onClick={() => setStatusModalOpen(true)} style={styles.openStatusModalBtn}>
-            <span>📍 My Status: <strong>{stations[myStation]?.current_mood}</strong></span>
+            <span>
+              📍 My Status: <strong>{stations[myStation]?.current_mood}</strong>
+            </span>
             <span style={{ fontSize: 11, color: "#c084fc", fontWeight: 700 }}>Change ▾</span>
           </button>
         </div>
 
-        {/* PERSPECTIVE-AWARE "THINKING OF YOU" HEART BAR */}
+        {/* THINKING OF YOU HEART BAR */}
         <div
           style={{
             ...styles.heartSectionCard,
@@ -918,10 +999,10 @@ export default function WalkieTalkieApp() {
               {myHeartOn && partnerHeartOn
                 ? `You & ${partnerName} both have your heart signals switched ON right now 💞`
                 : partnerHeartOn
-                ? `Incoming live signal from Greater Noida • Tap your button to beat back!`
+                ? `Incoming live signal • Tap your button to beat back!`
                 : myHeartOn
                 ? `${partnerName}'s screen shows: "${myName}'s heart is beating for you 💓"`
-                : `Tap ON so ${partnerName} sees "${myName}'s heart is beating for you 💓"`}
+                : `Tap SEND so ${partnerName} sees "${myName}'s heart is beating for you 💓"`}
             </div>
           </div>
 
@@ -959,7 +1040,11 @@ export default function WalkieTalkieApp() {
           <div style={styles.biometricHeader}>
             <span style={styles.biometricExclusiveTag}>🔒 BIOMETRIC TOUCH • SARTHAK × JAAI</span>
             <span style={styles.biometricBpmBadge}>
-              {bothThumbsSynced ? `💞 72 BPM • ${syncSeconds.toFixed(1)}s` : partnerThumbDown ? `⚡ ${partnerName.toUpperCase()} WAITING` : "12.10 MHz"}
+              {bothThumbsSynced
+                ? `💞 72 BPM • ${syncSeconds.toFixed(1)}s`
+                : partnerThumbDown
+                ? `⚡ ${partnerName.toUpperCase()} WAITING`
+                : "12.10 MHz"}
             </span>
           </div>
 
@@ -968,7 +1053,9 @@ export default function WalkieTalkieApp() {
               style={{
                 ...styles.thumbNode,
                 borderColor: (myStation === "bbi" ? myThumbDown : partnerThumbDown) ? "#ec4899" : "#2e1759",
-                background: (myStation === "bbi" ? myThumbDown : partnerThumbDown) ? "rgba(236, 72, 153, 0.2)" : "#120924",
+                background: (myStation === "bbi" ? myThumbDown : partnerThumbDown)
+                  ? "rgba(236, 72, 153, 0.2)"
+                  : "#120924",
               }}
             >
               <div style={{ fontSize: 10, fontWeight: 800, color: "#f5d0fe" }}>SARTHAK</div>
@@ -1027,7 +1114,9 @@ export default function WalkieTalkieApp() {
               style={{
                 ...styles.thumbNode,
                 borderColor: (myStation === "greno" ? myThumbDown : partnerThumbDown) ? "#ec4899" : "#2e1759",
-                background: (myStation === "greno" ? myThumbDown : partnerThumbDown) ? "rgba(236, 72, 153, 0.2)" : "#120924",
+                background: (myStation === "greno" ? myThumbDown : partnerThumbDown)
+                  ? "rgba(236, 72, 153, 0.2)"
+                  : "#120924",
               }}
             >
               <div style={{ fontSize: 10, fontWeight: 800, color: "#f5d0fe" }}>JAAI</div>
@@ -1052,7 +1141,9 @@ export default function WalkieTalkieApp() {
             style={{ ...styles.tabBtn, ...(activeTab === "polaroid" ? styles.tabBtnActive : {}) }}
           >
             📸 {partnerName}&apos;s Polaroid
-            {currentTape && (currentTape.note_text || currentTape.polaroid_url) && <span style={styles.unreadDot}>✦</span>}
+            {currentTape && (currentTape.note_text || currentTape.polaroid_url) && (
+              <span style={styles.unreadDot}>✦</span>
+            )}
           </button>
         </div>
 
@@ -1068,9 +1159,6 @@ export default function WalkieTalkieApp() {
             <div style={{ textAlign: "center", padding: "24px 12px", color: "#c4b5fd", fontSize: 13 }}>
               <div style={{ fontSize: 24, marginBottom: 6 }}>📻</div>
               Waiting for incoming transmissions from <strong>{partnerName}</strong>...
-              <div style={{ fontSize: 11, color: "#a78bfa", marginTop: 4 }}>
-                Hold the push-to-talk button below to send your voice note directly to {partnerName}.
-              </div>
             </div>
           ) : activeTab === "tape" ? (
             <>
@@ -1082,18 +1170,17 @@ export default function WalkieTalkieApp() {
 
               <div style={styles.tapeMetaRow}>
                 <span style={{ color: "#f5d0fe", fontWeight: 700 }}>
-                  INCOMING {String(currentIndex + 1).padStart(2, "0")}/{String(incomingTapes.length).padStart(2, "0")} • FROM {partnerName.toUpperCase()}
+                  INCOMING {String(currentIndex + 1).padStart(2, "0")}/
+                  {String(incomingTapes.length).padStart(2, "0")} • FROM {partnerName.toUpperCase()}
                 </span>
                 <span>
-                  {new Date(currentTape.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true })}
+                  {new Date(currentTape.created_at).toLocaleTimeString([], {
+                    hour: "numeric",
+                    minute: "2-digit",
+                    hour12: true,
+                  })}
                 </span>
               </div>
-
-              {currentTape.prompt_text && (
-                <div style={styles.promptReplyTag}>
-                  🎲 Ritual Prompt: &ldquo;{currentTape.prompt_text}&rdquo;
-                </div>
-              )}
 
               {/* CASSETTE WINDOW */}
               <div style={styles.cassetteWindow}>
@@ -1113,9 +1200,7 @@ export default function WalkieTalkieApp() {
 
               {lockStatus.locked ? (
                 <div style={styles.lockedBanner}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#f5d0fe" }}>
-                    🔒 {lockStatus.reason}
-                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#f5d0fe" }}>🔒 {lockStatus.reason}</div>
                 </div>
               ) : (
                 <div style={styles.playerControlsRow}>
@@ -1130,7 +1215,9 @@ export default function WalkieTalkieApp() {
                     onClick={togglePlayTape}
                     style={{
                       ...styles.playMainBtn,
-                      background: isUnreadPartnerTape ? "linear-gradient(135deg, #ec4899, #9333ea)" : "linear-gradient(135deg, #9333ea, #7e22ce)",
+                      background: isUnreadPartnerTape
+                        ? "linear-gradient(135deg, #ec4899, #9333ea)"
+                        : "linear-gradient(135deg, #9333ea, #7e22ce)",
                     }}
                   >
                     {isPlaying ? "⏹ STOP TAPE" : `▶ PLAY (${currentTape.duration_sec || 5}s)`}
@@ -1158,7 +1245,11 @@ export default function WalkieTalkieApp() {
                 <div style={styles.polaroidFrame}>
                   <div style={styles.polaroidPhotoArea}>
                     {currentTape.polaroid_url ? (
-                      <img src={currentTape.polaroid_url} alt="Polaroid" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <img
+                        src={currentTape.polaroid_url}
+                        alt="Polaroid"
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
                     ) : (
                       <div style={styles.polaroidDefaultArt}>
                         <div style={{ fontSize: 28 }}>💜 📻 ✨</div>
@@ -1193,136 +1284,156 @@ export default function WalkieTalkieApp() {
           )}
         </div>
 
-        {/* CLEAN, STREAMLINED COMPOSER (REPLACING THE CLUTTERED PART) */}
+        {/* CLEAN COMPOSER: NOTE + CAMERA/ALBUM + DEDICATED TIME LOCK + RECORD/CANCEL */}
         <div style={styles.composerCard}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <span style={{ fontSize: 11, fontWeight: 800, color: "#d8b4fe" }}>
-              🎙️ RECORD TO {partnerName.toUpperCase()}
-            </span>
-
-            {/* Quick Add-on Toggles */}
-            <div style={{ display: "flex", gap: 5 }}>
-              <button
-                onClick={() => setIsPromptAttached((v) => !v)}
-                style={{
-                  ...styles.chipToggle,
-                  background: isPromptAttached ? "#a855f7" : "#190e30",
-                  color: isPromptAttached ? "#ffffff" : "#c4b5fd",
-                }}
-              >
-                🎲 {isPromptAttached ? "Prompt ON" : "+ Prompt"}
-              </button>
-              <button
-                onClick={() => setIsTimeLockAttached((v) => !v)}
-                style={{
-                  ...styles.chipToggle,
-                  background: isTimeLockAttached ? "#ec4899" : "#190e30",
-                  color: isTimeLockAttached ? "#ffffff" : "#c4b5fd",
-                }}
-              >
-                ⏰ {isTimeLockAttached ? "Locked" : "+ Time Lock"}
-              </button>
-            </div>
+          <div style={{ fontSize: 11, fontWeight: 800, color: "#d8b4fe", marginBottom: 8 }}>
+            🎙️ TRANSMIT TO {partnerName.toUpperCase()}
           </div>
 
-          {/* Expandable Daily Prompt Card */}
-          {isPromptAttached && (
-            <div style={styles.expandedPromptCard}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 10, fontWeight: 800, color: "#f5d0fe" }}>🎲 ATTACHED DAILY PROMPT</span>
-                <span onClick={() => setIsPromptAttached(false)} style={{ cursor: "pointer", fontSize: 11, color: "#c4b5fd" }}>✕</span>
-              </div>
-              <div style={{ fontSize: 11.5, fontWeight: 700, color: "#fff", marginTop: 2 }}>
-                &ldquo;{todayPrompt}&rdquo;
-              </div>
-              <div style={{ fontSize: 9.5, color: "#d8b4fe", marginTop: 2 }}>
-                {partnerName} must record an answer before hearing your voice tape.
-              </div>
-            </div>
-          )}
-
-          {/* Expandable Time Lock Row */}
-          {isTimeLockAttached && (
-            <div style={styles.expandedTimeLockRow}>
-              <span style={{ fontSize: 11, color: "#f5d0fe" }}>Open after:</span>
-              <input
-                type="time"
-                value={unlockTimeStr}
-                onChange={(e) => setUnlockTimeStr(e.target.value)}
-                style={styles.timeInput}
-              />
-              <span onClick={() => setIsTimeLockAttached(false)} style={{ cursor: "pointer", fontSize: 12, color: "#c4b5fd" }}>✕</span>
-            </div>
-          )}
-
-          {/* Note Input + Photo Button */}
+          {/* 1. Note Input + Separate Camera & Album Buttons */}
           <div style={styles.composerInputRow}>
             <input
               type="text"
-              placeholder={`Optional note for ${partnerName}...`}
+              placeholder={`Optional Polaroid note for ${partnerName}...`}
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
               style={styles.textInput}
             />
-            <label style={styles.photoUploadBtn}>
-              📷 {polaroidFile ? "Photo Added" : "Add Photo"}
+
+            <button
+              type="button"
+              onClick={() => openLiveCamera("user")}
+              style={styles.photoUploadBtn}
+              title="Take a photo with camera"
+            >
+              📸 Camera
+            </button>
+
+            <label style={styles.photoUploadBtn} title="Choose photo from album">
+              🖼️ Album
               <input
                 type="file"
                 accept="image/*"
                 style={{ display: "none" }}
-                onChange={(e) => {
+                onChange={async (e) => {
                   const file = e.target.files?.[0];
                   if (file) {
-                    setPolaroidFile(file);
-                    setPolaroidPreview(URL.createObjectURL(file));
+                    const compressed = await compressImageToDataUrl(file);
+                    setPolaroidDataUrl(compressed);
                   }
                 }}
               />
             </label>
           </div>
 
-          {polaroidPreview && (
+          {/* Attached Photo Thumbnail Preview */}
+          {polaroidDataUrl && (
             <div style={styles.photoPreviewRow}>
-              <span>✓ Photo attached: ready to develop</span>
-              <span onClick={() => { setPolaroidFile(null); setPolaroidPreview(""); }} style={{ cursor: "pointer", color: "#f472b6", fontWeight: 700 }}>Remove ✕</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <img
+                  src={polaroidDataUrl}
+                  alt="Preview"
+                  style={{ width: 34, height: 34, borderRadius: 6, objectFit: "cover", border: "1px solid #c084fc" }}
+                />
+                <span>✓ Polaroid photo ready to send</span>
+              </div>
+              <span
+                onClick={() => setPolaroidDataUrl("")}
+                style={{ cursor: "pointer", color: "#f472b6", fontWeight: 700 }}
+              >
+                Remove ✕
+              </span>
             </div>
           )}
 
-          {/* Big Push-to-Talk Button */}
-          <button
-            onMouseDown={startRecording}
-            onMouseUp={stopRecording}
-            onTouchStart={(e) => {
-              e.preventDefault();
-              startRecording();
-            }}
-            onTouchEnd={(e) => {
-              e.preventDefault();
-              stopRecording();
-            }}
-            disabled={isUploading}
-            style={{
-              ...styles.pttButton,
-              background: isRecording
-                ? "linear-gradient(135deg, #ec4899, #be185d)"
-                : "linear-gradient(135deg, #9333ea, #6b21a8)",
-            }}
-          >
-            <div style={{ fontSize: 15, fontWeight: 800 }}>
-              {isUploading
-                ? "TRANSMITTING..."
-                : isRecording
-                ? `🔴 RECORDING (${recSeconds}s) — RELEASE TO SEND`
-                : `🎙️ HOLD TO TALK TO ${partnerName.toUpperCase()}`}
+          {/* 2. Separate Delivery Timing Option (Instant vs Open After Time) */}
+          <div style={styles.deliveryBox}>
+            <div style={styles.deliveryModeRow}>
+              <button
+                type="button"
+                onClick={() => setDeliveryMode("instant")}
+                style={{
+                  ...styles.modePill,
+                  ...(deliveryMode === "instant" ? styles.modePillActive : {}),
+                }}
+              >
+                ⚡ Send Instantly
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDeliveryMode("scheduled")}
+                style={{
+                  ...styles.modePill,
+                  ...(deliveryMode === "scheduled" ? styles.modePillActive : {}),
+                }}
+              >
+                ⏰ Open After This Time
+              </button>
             </div>
-            <div style={{ fontSize: 10.5, color: "#f3e8ff", opacity: 0.85, marginTop: 2 }}>
-              Release to send voice tape directly to {partnerName}&apos;s radio
+
+            {deliveryMode === "scheduled" && (
+              <div style={styles.customTimePickerRow}>
+                <span style={{ fontSize: 11.5, color: "#f5d0fe", fontWeight: 600 }}>
+                  🔒 {partnerName} can open this after:
+                </span>
+                <input
+                  type="time"
+                  value={unlockTimeStr}
+                  onChange={(e) => setUnlockTimeStr(e.target.value)}
+                  style={styles.timeInput}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* 3. Recording Controls with Explicit CANCEL and SEND Buttons */}
+          {!isRecording ? (
+            <button
+              type="button"
+              onClick={startRecording}
+              disabled={isUploading}
+              style={{
+                ...styles.pttButton,
+                background: "linear-gradient(135deg, #9333ea, #6b21a8)",
+              }}
+            >
+              <div style={{ fontSize: 15, fontWeight: 800 }}>
+                {isUploading
+                  ? "TRANSMITTING..."
+                  : `🎙️ TAP TO RECORD TO ${partnerName.toUpperCase()}`}
+              </div>
+              <div style={{ fontSize: 10.5, color: "#f3e8ff", opacity: 0.85, marginTop: 2 }}>
+                Tap once to start recording • You can Cancel or Send before it goes out
+              </div>
+            </button>
+          ) : (
+            <div style={styles.activeRecordBox}>
+              <div style={styles.recordingIndicatorText}>
+                🔴 Recording voice note... <strong>{recSeconds}s</strong>
+              </div>
+              <div style={styles.recordActionsRow}>
+                <button
+                  type="button"
+                  onClick={cancelRecording}
+                  style={styles.cancelRecBtn}
+                >
+                  🗑️ Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={finishAndSendRecording}
+                  style={styles.sendRecBtn}
+                >
+                  ➤ Send to {partnerName} ({recSeconds}s)
+                </button>
+              </div>
             </div>
-          </button>
+          )}
 
           {uploadNotice && <div style={styles.sentFooterStatus}>{uploadNotice}</div>}
 
-          {/* Expandable Sent Archive (To verify that your sent notes went through) */}
+          {/* Expandable Sent Archive */}
           <div style={{ marginTop: 10, textAlign: "center" }}>
             <button onClick={() => setViewSentArchive((v) => !v)} style={styles.sentArchiveToggle}>
               {viewSentArchive ? "Hide Sent Archive ▲" : `View My Sent Tapes (${sentTapes.length}) ▼`}
@@ -1336,11 +1447,15 @@ export default function WalkieTalkieApp() {
                   sentTapes.slice(0, 5).map((tape, idx) => (
                     <div key={tape.id || idx} style={styles.sentArchiveItem}>
                       <span>
-                        {new Date(tape.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true })}
+                        {new Date(tape.created_at).toLocaleTimeString([], {
+                          hour: "numeric",
+                          minute: "2-digit",
+                          hour12: true,
+                        })}
                         {tape.note_text ? ` • "${tape.note_text}"` : ` • ${tape.duration_sec}s audio`}
                       </span>
                       <span style={{ color: tape.is_listened ? "#4ade80" : "#fbbf24", fontWeight: 700 }}>
-                        {tape.is_listened ? "✓ Heard by Jaai" : "Sent (Waiting for Jaai)"}
+                        {tape.is_listened ? `✓ Heard by ${partnerName}` : `Sent to ${partnerName}`}
                       </span>
                     </div>
                   ))
@@ -1351,16 +1466,50 @@ export default function WalkieTalkieApp() {
         </div>
       </div>
 
-      {/* STATUS SELECTOR BOTTOM SHEET / MODAL */}
+      {/* LIVE IN-APP CAMERA MODAL */}
+      {cameraModalOpen && (
+        <div style={styles.modalBackdrop} onClick={closeLiveCamera}>
+          <div style={styles.cameraModalBox} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <span style={{ fontSize: 14, fontWeight: 800, color: "#f5d0fe" }}>📸 Snap Polaroid Photo</span>
+              <button onClick={closeLiveCamera} style={styles.closeModalBtn}>
+                ✕
+              </button>
+            </div>
+
+            <div style={styles.cameraViewportWrap}>
+              <video
+                ref={cameraVideoRef}
+                autoPlay
+                playsInline
+                muted
+                style={styles.cameraVideo}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <button type="button" onClick={flipCamera} style={styles.flipCameraBtn}>
+                🔄 Flip Camera
+              </button>
+              <button type="button" onClick={snapCameraPhoto} style={styles.snapPhotoBtn}>
+                📸 Capture Photo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* STATUS SELECTOR BOTTOM SHEET */}
       {statusModalOpen && (
         <div style={styles.modalBackdrop} onClick={() => setStatusModalOpen(false)}>
           <div style={styles.modalSheet} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <span style={{ fontSize: 14, fontWeight: 800, color: "#f5d0fe" }}>Update Your Radio Status</span>
-              <button onClick={() => setStatusModalOpen(false)} style={styles.closeModalBtn}>✕</button>
+              <button onClick={() => setStatusModalOpen(false)} style={styles.closeModalBtn}>
+                ✕
+              </button>
             </div>
 
-            {/* Custom Status Input */}
             <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
               <input
                 type="text"
@@ -1377,7 +1526,6 @@ export default function WalkieTalkieApp() {
               </button>
             </div>
 
-            {/* Presets */}
             {STATUS_PRESETS.map((group) => (
               <div key={group.group} style={{ marginBottom: 12 }}>
                 <div style={styles.presetGroupTitle}>{group.group}</div>
@@ -1691,15 +1839,6 @@ const styles = {
     color: "#c4b5fd",
     marginBottom: 6,
   },
-  promptReplyTag: {
-    fontSize: 10.5,
-    color: "#f5d0fe",
-    background: "#231142",
-    border: "1px solid #581c87",
-    borderRadius: 6,
-    padding: "4px 7px",
-    marginBottom: 8,
-  },
   cassetteWindow: {
     display: "flex",
     justifyContent: "space-around",
@@ -1825,35 +1964,10 @@ const styles = {
     borderRadius: 16,
     padding: 11,
   },
-  chipToggle: {
-    fontSize: 10,
-    fontWeight: 700,
-    border: "1px solid #581c87",
-    padding: "3px 8px",
-    borderRadius: 999,
-    cursor: "pointer",
-  },
-  expandedPromptCard: {
-    background: "#22113e",
-    border: "1px solid #a855f7",
-    borderRadius: 10,
-    padding: "7px 10px",
-    marginBottom: 8,
-  },
-  expandedTimeLockRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    background: "#22113e",
-    border: "1px solid #ec4899",
-    borderRadius: 10,
-    padding: "5px 10px",
-    marginBottom: 8,
-  },
   composerInputRow: {
     display: "flex",
-    gap: 6,
-    marginBottom: 6,
+    gap: 5,
+    marginBottom: 8,
   },
   textInput: {
     flex: 1,
@@ -1863,13 +1977,14 @@ const styles = {
     padding: "7px 9px",
     color: "#f3e8ff",
     fontSize: 11.5,
+    minWidth: 0,
   },
   photoUploadBtn: {
     background: "#261447",
     border: "1px solid #581c87",
     borderRadius: 8,
-    padding: "7px 9px",
-    fontSize: 11,
+    padding: "7px 8px",
+    fontSize: 10.5,
     fontWeight: 700,
     color: "#e9d5ff",
     cursor: "pointer",
@@ -1880,19 +1995,56 @@ const styles = {
   photoPreviewRow: {
     display: "flex",
     justifyContent: "space-between",
-    fontSize: 10.5,
+    alignItems: "center",
+    fontSize: 11,
     color: "#d8b4fe",
-    marginBottom: 6,
-    padding: "0 2px",
+    background: "#120924",
+    border: "1px solid #3b1d6e",
+    borderRadius: 8,
+    padding: "5px 8px",
+    marginBottom: 8,
+  },
+  deliveryBox: {
+    marginBottom: 8,
+  },
+  deliveryModeRow: {
+    display: "flex",
+    gap: 6,
+  },
+  modePill: {
+    flex: 1,
+    padding: "7px 6px",
+    fontSize: 11,
+    borderRadius: 8,
+    background: "#100821",
+    border: "1px solid #2e1759",
+    color: "#c4b5fd",
+    cursor: "pointer",
+  },
+  modePillActive: {
+    background: "#581c87",
+    borderColor: "#c084fc",
+    color: "#fff",
+    fontWeight: 700,
+  },
+  customTimePickerRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    background: "#22113e",
+    border: "1px solid #ec4899",
+    borderRadius: 8,
+    padding: "6px 10px",
+    marginTop: 6,
   },
   timeInput: {
-    background: "#160b29",
+    background: "#130826",
     color: "#fff",
-    border: "1px solid #a855f7",
+    border: "1px solid #f472b6",
     borderRadius: 6,
-    padding: "3px 6px",
+    padding: "4px 8px",
     fontFamily: "'JetBrains Mono', monospace",
-    fontSize: 11,
+    fontSize: 11.5,
   },
   pttButton: {
     width: "100%",
@@ -1903,6 +2055,44 @@ const styles = {
     cursor: "pointer",
     boxShadow: "0 6px 20px rgba(147, 51, 234, 0.4)",
     userSelect: "none",
+  },
+  activeRecordBox: {
+    background: "#230f38",
+    border: "1.5px solid #ec4899",
+    borderRadius: 14,
+    padding: "10px",
+    textAlign: "center",
+  },
+  recordingIndicatorText: {
+    fontSize: 13,
+    color: "#fbcfe8",
+    marginBottom: 8,
+  },
+  recordActionsRow: {
+    display: "flex",
+    gap: 8,
+  },
+  cancelRecBtn: {
+    flex: 1,
+    padding: "10px",
+    borderRadius: 10,
+    background: "#31102f",
+    border: "1px solid #f43f5e",
+    color: "#fda4af",
+    fontSize: 12,
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  sendRecBtn: {
+    flex: 2,
+    padding: "10px",
+    borderRadius: 10,
+    background: "linear-gradient(135deg, #ec4899, #9333ea)",
+    border: "1px solid #fbcfe8",
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: 800,
+    cursor: "pointer",
   },
   sentFooterStatus: {
     marginTop: 6,
@@ -1940,20 +2130,63 @@ const styles = {
     left: 0,
     right: 0,
     bottom: 0,
-    background: "rgba(0,0,0,0.75)",
+    background: "rgba(0,0,0,0.8)",
     backdropFilter: "blur(4px)",
     display: "flex",
-    alignItems: "flex-end",
+    alignItems: "center",
     justifyContent: "center",
     zIndex: 100,
+    padding: 14,
+  },
+  cameraModalBox: {
+    width: "100%",
+    maxWidth: 380,
+    background: "#150c29",
+    border: "1.5px solid #a855f7",
+    borderRadius: 20,
+    padding: 14,
+  },
+  cameraViewportWrap: {
+    width: "100%",
+    height: 260,
+    background: "#090512",
+    borderRadius: 12,
+    overflow: "hidden",
+    border: "1px solid #3b1d6e",
+  },
+  cameraVideo: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+  },
+  flipCameraBtn: {
+    flex: 1,
+    padding: "10px",
+    borderRadius: 10,
+    background: "#261447",
+    border: "1px solid #581c87",
+    color: "#e9d5ff",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  snapPhotoBtn: {
+    flex: 2,
+    padding: "10px",
+    borderRadius: 10,
+    background: "linear-gradient(135deg, #ec4899, #9333ea)",
+    border: "1px solid #fbcfe8",
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: 800,
+    cursor: "pointer",
   },
   modalSheet: {
     width: "100%",
     maxWidth: 430,
     background: "#150c29",
-    borderTop: "2px solid #581c87",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    border: "1.5px solid #581c87",
+    borderRadius: 20,
     padding: "16px",
     maxHeight: "80vh",
     overflowY: "auto",
