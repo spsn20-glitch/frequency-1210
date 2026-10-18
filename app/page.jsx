@@ -57,7 +57,6 @@ function fileToBase64(blob) {
   });
 }
 
-// Compress image file to a fast, lightweight Polaroid JPEG Data URL
 function compressImageToDataUrl(file, maxWidth = 600) {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -160,14 +159,22 @@ export default function WalkieTalkieApp() {
     greno: { station_id: "greno", display_name: "Jaai • GreNo", city: "Greater Noida", current_mood: "Free to talk right now! 🎙️", heart_active: false },
   });
 
-  // Transmissions
+  // Transmissions & Local Read/Vault Tracking (Guaranteed Highlight)
   const [tapes, setTapes] = useState([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [readTapeIds, setReadTapeIds] = useState([]);
+  const [readPolaroidIds, setReadPolaroidIds] = useState([]);
+  const [vaultedTapeIds, setVaultedTapeIds] = useState([]);
+
   const [activeTab, setActiveTab] = useState("tape"); // 'tape' | 'polaroid'
   const [isPlaying, setIsPlaying] = useState(false);
+  const [playingVaultId, setPlayingVaultId] = useState(null);
   const [nowTs, setNowTs] = useState(Date.now());
+
+  // Modals
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [customStatusInput, setCustomStatusInput] = useState("");
+  const [vaultModalOpen, setVaultModalOpen] = useState(false);
+  const [vaultTab, setVaultTab] = useState("tapes"); // 'tapes' | 'polaroids'
   const [viewSentArchive, setViewSentArchive] = useState(false);
 
   // Recording & Composer State
@@ -180,9 +187,9 @@ export default function WalkieTalkieApp() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadNotice, setUploadNotice] = useState("");
 
-  // Live Camera Modal State
+  // Live Camera Modal
   const [cameraModalOpen, setCameraModalOpen] = useState(false);
-  const [cameraFacing, setCameraFacing] = useState("user"); // 'user' | 'environment'
+  const [cameraFacing, setCameraFacing] = useState("user");
 
   // Presence & Biometric Sync
   const [partnerOnline, setPartnerOnline] = useState(false);
@@ -206,11 +213,20 @@ export default function WalkieTalkieApp() {
   const myName = myStation === "bbi" ? "Sarthak" : "Jaai";
   const partnerName = myStation === "bbi" ? "Jaai" : "Sarthak";
 
+  // Load saved state from localStorage
   useEffect(() => {
     const savedPin = localStorage.getItem("freq1210_pin");
     const savedStation = localStorage.getItem("freq1210_station");
+    const savedReadTapes = JSON.parse(localStorage.getItem("freq1210_read_tapes") || "[]");
+    const savedReadPolaroids = JSON.parse(localStorage.getItem("freq1210_read_polaroids") || "[]");
+    const savedVaulted = JSON.parse(localStorage.getItem("freq1210_vaulted_tapes") || "[]");
+
     if (savedStation) setMyStation(savedStation);
     if (savedPin === PASSCODE) setUnlocked(true);
+    setReadTapeIds(savedReadTapes);
+    setReadPolaroidIds(savedReadPolaroids);
+    setVaultedTapeIds(savedVaulted);
+
     if (typeof window !== "undefined" && "Notification" in window) {
       setNotifEnabled(Notification.permission === "granted");
     }
@@ -218,6 +234,38 @@ export default function WalkieTalkieApp() {
     const clock = setInterval(() => setNowTs(Date.now()), 10000);
     return () => clearInterval(clock);
   }, []);
+
+  const markTapeReadLocal = (id) => {
+    if (!id) return;
+    setReadTapeIds((prev) => {
+      if (prev.includes(id)) return prev;
+      const next = [...prev, id];
+      localStorage.setItem("freq1210_read_tapes", JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const markPolaroidReadLocal = (id) => {
+    if (!id) return;
+    setReadPolaroidIds((prev) => {
+      if (prev.includes(id)) return prev;
+      const next = [...prev, id];
+      localStorage.setItem("freq1210_read_polaroids", JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const moveTapeToVaultLocal = (id) => {
+    if (!id) return;
+    markTapeReadLocal(id);
+    markPolaroidReadLocal(id);
+    setVaultedTapeIds((prev) => {
+      if (prev.includes(id)) return prev;
+      const next = [...prev, id];
+      localStorage.setItem("freq1210_vaulted_tapes", JSON.stringify(next));
+      return next;
+    });
+  };
 
   const requestNotificationAccess = async () => {
     if (typeof window === "undefined" || !("Notification" in window)) {
@@ -279,11 +327,10 @@ export default function WalkieTalkieApp() {
         .from("transmissions")
         .select("*")
         .order("created_at", { ascending: false })
-        .limit(60);
+        .limit(80);
 
       if (tapeData && !tapeErr) {
         setTapes(tapeData);
-        setCurrentIndex(0);
       }
     }
 
@@ -317,9 +364,9 @@ export default function WalkieTalkieApp() {
           if (newTape.sender !== myStation) {
             playRadioBurst(190);
             if (navigator.vibrate) navigator.vibrate([120, 80, 160]);
-            setCurrentIndex(0);
+            setActiveTab("tape");
             sendPhoneNotification(
-              `🎙️ New Tape from ${partnerName}!`,
+              `🎙️ New Transmission from ${partnerName}!`,
               newTape.polaroid_url ? `${partnerName} sent a Voice Tape + Polaroid on 12.10 MHz!` : `${partnerName} sent a Voice Tape!`
             );
           }
@@ -382,7 +429,9 @@ export default function WalkieTalkieApp() {
     };
   }, [myThumbDown, partnerThumbDown]);
 
-  // Filter Incoming vs Sent
+  // -------------------------------------------------------------------------
+  // SEPARATE SPOTLIGHT MESSAGE (NEWEST) vs OLDER VAULT MESSAGES
+  // -------------------------------------------------------------------------
   const incomingTapes = useMemo(() => {
     return tapes.filter((t) => t.sender !== myStation);
   }, [tapes, myStation]);
@@ -391,21 +440,55 @@ export default function WalkieTalkieApp() {
     return tapes.filter((t) => t.sender === myStation);
   }, [tapes, myStation]);
 
+  // The #1 newest incoming message sits on the Main Spotlight Stage (unless manually moved to Vault)
+  const latestIncoming = incomingTapes[0] || null;
+  const spotlightTape =
+    latestIncoming && !vaultedTapeIds.includes(latestIncoming.id) ? latestIncoming : null;
+
+  // All other incoming messages (plus any manually vaulted message) live in the Memory Vault
+  const vaultTapes = useMemo(() => {
+    if (!incomingTapes.length) return [];
+    if (spotlightTape) {
+      return incomingTapes.slice(1);
+    }
+    return incomingTapes;
+  }, [incomingTapes, spotlightTape]);
+
+  const vaultPolaroids = useMemo(() => {
+    return vaultTapes.filter((t) => t.polaroid_url || t.note_text);
+  }, [vaultTapes]);
+
+  // Determine if the Spotlight Tape or its Polaroid is UNREAD / FRESH
+  const isSpotlightVoiceUnread = Boolean(
+    spotlightTape &&
+      spotlightTape.is_listened !== true &&
+      !readTapeIds.includes(spotlightTape.id)
+  );
+
+  const hasSpotlightPolaroid = Boolean(
+    spotlightTape && (spotlightTape.polaroid_url || spotlightTape.note_text)
+  );
+
+  const isSpotlightPolaroidUnread = Boolean(
+    hasSpotlightPolaroid &&
+      spotlightTape.polaroid_developed !== true &&
+      !readPolaroidIds.includes(spotlightTape.id)
+  );
+
+  const isAnySpotlightNew = isSpotlightVoiceUnread || isSpotlightPolaroidUnread;
+
   const streakDays = useMemo(() => {
     const uniqueDays = new Set(tapes.map((t) => new Date(t.created_at).toDateString())).size;
     return Math.max(uniqueDays, tapes.length > 0 ? 1 : 0);
   }, [tapes]);
 
-  const currentTape = incomingTapes[currentIndex] || null;
-  const isUnreadPartnerTape = Boolean(currentTape && currentTape.is_listened === false);
-
-  // Check Time Lock Status Only (Two-way unlock removed)
+  // Check Time Lock Status on Spotlight Tape
   const lockStatus = useMemo(() => {
-    if (!currentTape || !currentTape.unlock_at) return { locked: false, reason: "" };
+    if (!spotlightTape || !spotlightTape.unlock_at) return { locked: false, reason: "" };
 
-    const unlockMs = new Date(currentTape.unlock_at).getTime();
+    const unlockMs = new Date(spotlightTape.unlock_at).getTime();
     if (unlockMs > nowTs) {
-      const formattedTime = new Date(currentTape.unlock_at).toLocaleTimeString([], {
+      const formattedTime = new Date(spotlightTape.unlock_at).toLocaleTimeString([], {
         hour: "numeric",
         minute: "2-digit",
         hour12: true,
@@ -417,45 +500,46 @@ export default function WalkieTalkieApp() {
     }
 
     return { locked: false, reason: "" };
-  }, [currentTape, nowTs]);
+  }, [spotlightTape, nowTs]);
 
-  // Darkroom Scratch Canvas
+  // Darkroom Scratch Canvas for Unread Spotlight Polaroid
   useEffect(() => {
-    if (activeTab !== "polaroid" || !currentTape || currentTape.polaroid_developed) return;
+    if (activeTab !== "polaroid" || !spotlightTape || !isSpotlightPolaroidUnread) return;
     const canvas = scratchCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     ctx.globalCompositeOperation = "source-over";
 
     const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-    grad.addColorStop(0, "#1c1033");
-    grad.addColorStop(0.5, "#2e1a4f");
-    grad.addColorStop(1, "#140b24");
+    grad.addColorStop(0, "#2e1065");
+    grad.addColorStop(0.5, "#4c1d95");
+    grad.addColorStop(1, "#1e1b4b");
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    ctx.fillStyle = "#e9d5ff";
+    ctx.fillStyle = "#fbcfe8";
     ctx.font = "bold 13px 'Plus Jakarta Sans', sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("✨ UNEXPOSED DARKROOM FILM ✨", canvas.width / 2, canvas.height / 2 - 8);
+    ctx.fillText("✨ NEW MYSTERY POLAROID ✨", canvas.width / 2, canvas.height / 2 - 8);
     ctx.font = "11px 'Plus Jakarta Sans', sans-serif";
-    ctx.fillStyle = "#c084fc";
-    ctx.fillText("Scratch with finger or tap 'Instant Reveal'", canvas.width / 2, canvas.height / 2 + 14);
-  }, [activeTab, currentTape]);
+    ctx.fillStyle = "#e9d5ff";
+    ctx.fillText("Rub across with finger or tap 'Instant Reveal'", canvas.width / 2, canvas.height / 2 + 14);
+  }, [activeTab, spotlightTape, isSpotlightPolaroidUnread]);
 
   const markPolaroidRevealed = async () => {
-    if (!currentTape) return;
+    if (!spotlightTape) return;
     if (navigator.vibrate) navigator.vibrate(40);
+    markPolaroidReadLocal(spotlightTape.id);
     setTapes((prev) =>
-      prev.map((t) => (t.id === currentTape.id ? { ...t, polaroid_developed: true } : t))
+      prev.map((t) => (t.id === spotlightTape.id ? { ...t, polaroid_developed: true } : t))
     );
     if (supabase) {
-      await supabase.from("transmissions").update({ polaroid_developed: true }).eq("id", currentTape.id);
+      await supabase.from("transmissions").update({ polaroid_developed: true }).eq("id", spotlightTape.id);
     }
   };
 
   const handleScratchMove = (e) => {
-    if (!currentTape || currentTape.polaroid_developed) return;
+    if (!spotlightTape || !isSpotlightPolaroidUnread) return;
     const canvas = scratchCanvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -475,7 +559,7 @@ export default function WalkieTalkieApp() {
     for (let i = 3; i < imgData.length; i += 16) {
       if (imgData[i] < 128) transparent++;
     }
-    if (transparent / (imgData.length / 16) > 0.45) {
+    if (transparent / (imgData.length / 16) > 0.42) {
       markPolaroidRevealed();
     }
   };
@@ -524,16 +608,18 @@ export default function WalkieTalkieApp() {
     }
   };
 
-  const togglePlayTape = async () => {
-    if (!currentTape || lockStatus.locked || !audioPlayerRef.current) return;
+  // Play / Stop Spotlight Voice Tape
+  const togglePlaySpotlightTape = async () => {
+    if (!spotlightTape || lockStatus.locked || !audioPlayerRef.current) return;
 
-    if (isPlaying) {
+    if (isPlaying && !playingVaultId) {
       audioPlayerRef.current.pause();
       audioPlayerRef.current.currentTime = 0;
       setIsPlaying(false);
     } else {
       playRadioBurst(160);
-      audioPlayerRef.current.src = currentTape.audio_url;
+      setPlayingVaultId(null);
+      audioPlayerRef.current.src = spotlightTape.audio_url;
       try {
         await audioPlayerRef.current.play();
         setIsPlaying(true);
@@ -541,20 +627,42 @@ export default function WalkieTalkieApp() {
         alert("Audio playback failed. Please tap Play again.");
       }
 
-      if (currentTape.is_listened === false) {
-        setTapes((prev) =>
-          prev.map((t) => (t.id === currentTape.id ? { ...t, is_listened: true } : t))
-        );
-        if (supabase) {
-          await supabase.from("transmissions").update({ is_listened: true }).eq("id", currentTape.id);
-        }
+      // Mark as read locally & in Supabase
+      markTapeReadLocal(spotlightTape.id);
+      if (!spotlightTape.polaroid_url) {
+        markPolaroidReadLocal(spotlightTape.id);
+      }
+      setTapes((prev) =>
+        prev.map((t) => (t.id === spotlightTape.id ? { ...t, is_listened: true } : t))
+      );
+      if (supabase) {
+        await supabase.from("transmissions").update({ is_listened: true }).eq("id", spotlightTape.id);
       }
     }
   };
 
-  // -------------------------------------------------------------------------
-  // LIVE CAMERA CAPTURE FUNCTIONS
-  // -------------------------------------------------------------------------
+  // Play / Stop Past Tape inside Memory Vault
+  const togglePlayVaultTape = async (tape) => {
+    if (!audioPlayerRef.current) return;
+    if (isPlaying && playingVaultId === tape.id) {
+      audioPlayerRef.current.pause();
+      audioPlayerRef.current.currentTime = 0;
+      setIsPlaying(false);
+      setPlayingVaultId(null);
+    } else {
+      playRadioBurst(120);
+      audioPlayerRef.current.src = tape.audio_url;
+      try {
+        await audioPlayerRef.current.play();
+        setIsPlaying(true);
+        setPlayingVaultId(tape.id);
+      } catch (err) {
+        alert("Could not play archived tape.");
+      }
+    }
+  };
+
+  // Live Camera Capture
   const openLiveCamera = async (facing = cameraFacing) => {
     setCameraModalOpen(true);
     try {
@@ -605,9 +713,7 @@ export default function WalkieTalkieApp() {
     closeLiveCamera();
   };
 
-  // -------------------------------------------------------------------------
-  // VOICE RECORDING WITH EXPLICIT "CANCEL" AND "SEND" BUTTONS
-  // -------------------------------------------------------------------------
+  // Recording with Explicit Cancel and Send
   const startRecording = async () => {
     if (isRecording) return;
     try {
@@ -633,7 +739,6 @@ export default function WalkieTalkieApp() {
           mediaStreamRef.current.getTracks().forEach((track) => track.stop());
           mediaStreamRef.current = null;
         }
-        // If user clicked Cancel, discard audio immediately and do NOT send
         if (isRecordingCancelledRef.current) {
           audioChunksRef.current = [];
           setUploadNotice("Recording cancelled.");
@@ -673,9 +778,6 @@ export default function WalkieTalkieApp() {
     mediaRecorderRef.current.stop();
   };
 
-  // -------------------------------------------------------------------------
-  // SCHEMA-SAFE UPLOAD & DATABASE SAVE
-  // -------------------------------------------------------------------------
   const uploadAndSend = async (audioBlob, mimeType) => {
     setIsUploading(true);
     setUploadNotice("Encoding & transmitting across 1,258 KM...");
@@ -683,7 +785,6 @@ export default function WalkieTalkieApp() {
     try {
       let finalAudioUrl = "";
 
-      // Try Supabase Storage first, fallback to Base64 data URL
       try {
         if (supabase) {
           const ext = mimeType.includes("mp4") ? "mp4" : "webm";
@@ -703,7 +804,6 @@ export default function WalkieTalkieApp() {
         finalAudioUrl = await fileToBase64(audioBlob);
       }
 
-      // Calculate Unlock Timestamp if "Open After Time" is selected
       let unlockIso = new Date().toISOString();
       if (deliveryMode === "scheduled" && unlockTimeStr) {
         const [hh, mm] = unlockTimeStr.split(":").map(Number);
@@ -728,8 +828,6 @@ export default function WalkieTalkieApp() {
 
       if (supabase) {
         const { error: dbErr } = await supabase.from("transmissions").insert([fullRow]);
-
-        // Auto-retry with minimal base columns if any newer column is missing in Supabase
         if (dbErr) {
           const minimalRow = {
             sender: myStation,
@@ -747,7 +845,6 @@ export default function WalkieTalkieApp() {
         }
       }
 
-      // Reset Composer
       setNoteText("");
       setPolaroidDataUrl("");
       setDeliveryMode("instant");
@@ -859,9 +956,19 @@ export default function WalkieTalkieApp() {
           0%, 100% { transform: scale(1); box-shadow: 0 0 15px rgba(236, 72, 153, 0.5); }
           50% { transform: scale(1.06); box-shadow: 0 0 32px rgba(236, 72, 153, 0.95); }
         }
-        @keyframes incomingGlow {
-          0%, 100% { box-shadow: 0 0 12px rgba(236, 72, 153, 0.35), inset 0 0 12px rgba(236, 72, 153, 0.15); border-color: #ec4899; }
-          50% { box-shadow: 0 0 24px rgba(236, 72, 153, 0.7), inset 0 0 18px rgba(236, 72, 153, 0.28); border-color: #f472b6; }
+        @keyframes spotlightGlow {
+          0%, 100% {
+            box-shadow: 0 0 18px rgba(236, 72, 153, 0.55), inset 0 0 18px rgba(236, 72, 153, 0.2);
+            border-color: #f472b6;
+          }
+          50% {
+            box-shadow: 0 0 34px rgba(244, 114, 182, 0.9), inset 0 0 26px rgba(236, 72, 153, 0.35);
+            border-color: #fde047;
+          }
+        }
+        @keyframes badgePulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.08); }
         }
       `}</style>
 
@@ -870,6 +977,7 @@ export default function WalkieTalkieApp() {
         onEnded={() => {
           playRadioBurst(140);
           setIsPlaying(false);
+          setPlayingVaultId(null);
         }}
       />
 
@@ -894,7 +1002,6 @@ export default function WalkieTalkieApp() {
             onClick={() => {
               const next = myStation === "bbi" ? "greno" : "bbi";
               setMyStation(next);
-              setCurrentIndex(0);
               localStorage.setItem("freq1210_station", next);
             }}
             style={styles.miniSwitchBtn}
@@ -1127,54 +1234,94 @@ export default function WalkieTalkieApp() {
           </div>
         </div>
 
-        {/* INCOMING RECEIVER TABS */}
+        {/* ================================================================= */}
+        {/* MAIN SPOTLIGHT STAGE: ONLY FOR THE LATEST / NEW TRANSMISSION      */}
+        {/* ================================================================= */}
         <div style={styles.tabBar}>
           <button
             onClick={() => setActiveTab("tape")}
-            style={{ ...styles.tabBtn, ...(activeTab === "tape" ? styles.tabBtnActive : {}) }}
+            style={{
+              ...styles.tabBtn,
+              ...(activeTab === "tape" ? styles.tabBtnActive : {}),
+              ...(isSpotlightVoiceUnread ? styles.tabBtnUnreadGlow : {}),
+            }}
           >
-            📻 {partnerName}&apos;s Voice Tape
-            {isUnreadPartnerTape && <span style={styles.unreadDot}>NEW</span>}
+            📻 {partnerName}&apos;s Latest Tape
+            {isSpotlightVoiceUnread && <span style={styles.unreadDot}>🔥 NEW</span>}
           </button>
+
           <button
-            onClick={() => setActiveTab("polaroid")}
-            style={{ ...styles.tabBtn, ...(activeTab === "polaroid" ? styles.tabBtnActive : {}) }}
+            onClick={() => {
+              setActiveTab("polaroid");
+              if (spotlightTape && !spotlightTape.polaroid_url && spotlightTape.note_text) {
+                markPolaroidReadLocal(spotlightTape.id);
+              }
+            }}
+            style={{
+              ...styles.tabBtn,
+              ...(activeTab === "polaroid" ? styles.tabBtnActive : {}),
+              ...(isSpotlightPolaroidUnread ? styles.tabBtnUnreadGlow : {}),
+            }}
           >
             📸 {partnerName}&apos;s Polaroid
-            {currentTape && (currentTape.note_text || currentTape.polaroid_url) && (
-              <span style={styles.unreadDot}>✦</span>
+            {isSpotlightPolaroidUnread ? (
+              <span style={styles.unreadDot}>🔥 NEW PHOTO</span>
+            ) : (
+              hasSpotlightPolaroid && <span style={styles.attachedDot}>✦</span>
             )}
           </button>
         </div>
 
-        {/* INCOMING RECEIVER DECK */}
+        {/* SPOTLIGHT DECK CONTAINER */}
         <div
           style={{
             ...styles.deckContainer,
-            animation: isUnreadPartnerTape ? "incomingGlow 2s infinite ease-in-out" : "none",
-            borderColor: isUnreadPartnerTape ? "#ec4899" : "#3b1d6e",
+            background: isAnySpotlightNew
+              ? "linear-gradient(160deg, #2b0c3d 0%, #140726 100%)"
+              : "#0f071e",
+            animation: isAnySpotlightNew ? "spotlightGlow 2s infinite ease-in-out" : "none",
+            borderColor: isAnySpotlightNew ? "#f472b6" : "#3b1d6e",
           }}
         >
-          {!currentTape ? (
-            <div style={{ textAlign: "center", padding: "24px 12px", color: "#c4b5fd", fontSize: 13 }}>
-              <div style={{ fontSize: 24, marginBottom: 6 }}>📻</div>
-              Waiting for incoming transmissions from <strong>{partnerName}</strong>...
+          {!spotlightTape ? (
+            <div style={{ textAlign: "center", padding: "22px 12px", color: "#c4b5fd", fontSize: 13 }}>
+              <div style={{ fontSize: 24, marginBottom: 6 }}>✨📻</div>
+              <div style={{ fontWeight: 700, color: "#f3e8ff" }}>
+                Main Stage Clear — Waiting for {partnerName}&apos;s Next Transmission
+              </div>
+              <div style={{ fontSize: 11, color: "#a78bfa", marginTop: 4 }}>
+                {vaultTapes.length > 0
+                  ? `All ${vaultTapes.length} earlier messages are safely stored in your Memory Vault below.`
+                  : `As soon as ${partnerName} sends a voice note or Polaroid, it will spotlight right here!`}
+              </div>
             </div>
           ) : activeTab === "tape" ? (
             <>
-              {isUnreadPartnerTape && (
+              {/* DRAMATIC HIGHLIGHT BANNER FOR FRESH MESSAGE */}
+              {isAnySpotlightNew ? (
                 <div style={styles.incomingHighlightBanner}>
-                  ✨ NEW UNPLAYED TRANSMISSION FROM {partnerName.toUpperCase()}
+                  <span>🚨 FRESH TRANSMISSION FROM {partnerName.toUpperCase()}</span>
+                  <span style={styles.liveTagPill}>SPOTLIGHT</span>
+                </div>
+              ) : (
+                <div style={styles.listenedStageBanner}>
+                  <span>✓ LATEST TRANSMISSION PLAYED</span>
+                  <button
+                    type="button"
+                    onClick={() => moveTapeToVaultLocal(spotlightTape.id)}
+                    style={styles.moveToVaultMiniBtn}
+                  >
+                    📥 Move to Vault
+                  </button>
                 </div>
               )}
 
               <div style={styles.tapeMetaRow}>
-                <span style={{ color: "#f5d0fe", fontWeight: 700 }}>
-                  INCOMING {String(currentIndex + 1).padStart(2, "0")}/
-                  {String(incomingTapes.length).padStart(2, "0")} • FROM {partnerName.toUpperCase()}
+                <span style={{ color: isAnySpotlightNew ? "#fbcfe8" : "#c4b5fd", fontWeight: 800 }}>
+                  🎙️ LATEST ON 12.10 MHz • FROM {partnerName.toUpperCase()}
                 </span>
-                <span>
-                  {new Date(currentTape.created_at).toLocaleTimeString([], {
+                <span style={{ color: "#e9d5ff" }}>
+                  {new Date(spotlightTape.created_at).toLocaleTimeString([], {
                     hour: "numeric",
                     minute: "2-digit",
                     hour12: true,
@@ -1182,18 +1329,63 @@ export default function WalkieTalkieApp() {
                 </span>
               </div>
 
-              {/* CASSETTE WINDOW */}
-              <div style={styles.cassetteWindow}>
-                <div style={{ ...styles.reelWheel, animation: isPlaying ? "spinReel 2.2s linear infinite" : "none" }}>
+              {/* CALLOUT IF A NEW POLAROID IS WAITING ON THE OTHER TAB */}
+              {hasSpotlightPolaroid && (
+                <div
+                  onClick={() => setActiveTab("polaroid")}
+                  style={{
+                    ...styles.polaroidAlertStrip,
+                    background: isSpotlightPolaroidUnread
+                      ? "linear-gradient(90deg, rgba(236,72,153,0.3), rgba(168,85,247,0.3))"
+                      : "#1a0e33",
+                    borderColor: isSpotlightPolaroidUnread ? "#f472b6" : "#4c1d95",
+                  }}
+                >
+                  <span>
+                    {isSpotlightPolaroidUnread
+                      ? `📸 ${partnerName} attached a Mystery Polaroid to this voice note!`
+                      : `📸 Polaroid Note attached to this transmission`}
+                  </span>
+                  <span style={{ fontWeight: 800, color: "#fde047" }}>Open Polaroid →</span>
+                </div>
+              )}
+
+              {/* CASSETTE REELS WINDOW */}
+              <div
+                style={{
+                  ...styles.cassetteWindow,
+                  borderColor: isAnySpotlightNew ? "#ec4899" : "#4c1d95",
+                  background: isAnySpotlightNew ? "#240d3d" : "#190d30",
+                }}
+              >
+                <div
+                  style={{
+                    ...styles.reelWheel,
+                    borderColor: isAnySpotlightNew ? "#f472b6" : "#a855f7",
+                    animation: isPlaying && !playingVaultId ? "spinReel 2.2s linear infinite" : "none",
+                  }}
+                >
                   <div style={styles.reelCore} />
                 </div>
+
                 <div style={styles.cassetteCenterLabel}>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: "#f5d0fe" }}>12.10 MHz</div>
-                  <div style={{ fontSize: 9, color: "#a78bfa", marginTop: 2 }}>
-                    {isPlaying ? "PLAYING AUDIO..." : `${currentTape.duration_sec || 5}s VOICE TAPE`}
+                  <div style={{ fontSize: 10, fontWeight: 800, color: "#fde047" }}>
+                    {isAnySpotlightNew ? "★ NEW TAPE ★" : "12.10 MHz"}
+                  </div>
+                  <div style={{ fontSize: 9.5, color: "#f3e8ff", marginTop: 2, fontWeight: 700 }}>
+                    {isPlaying && !playingVaultId
+                      ? "🔊 PLAYING NOW..."
+                      : `${spotlightTape.duration_sec || 5}s VOICE NOTE`}
                   </div>
                 </div>
-                <div style={{ ...styles.reelWheel, animation: isPlaying ? "spinReel 2.2s linear infinite" : "none" }}>
+
+                <div
+                  style={{
+                    ...styles.reelWheel,
+                    borderColor: isAnySpotlightNew ? "#f472b6" : "#a855f7",
+                    animation: isPlaying && !playingVaultId ? "spinReel 2.2s linear infinite" : "none",
+                  }}
+                >
                   <div style={styles.reelCore} />
                 </div>
               </div>
@@ -1205,78 +1397,79 @@ export default function WalkieTalkieApp() {
               ) : (
                 <div style={styles.playerControlsRow}>
                   <button
-                    onClick={() => setCurrentIndex((i) => Math.min(incomingTapes.length - 1, i + 1))}
-                    disabled={currentIndex >= incomingTapes.length - 1}
-                    style={styles.navTapeBtn}
-                  >
-                    ◀ OLDER
-                  </button>
-                  <button
-                    onClick={togglePlayTape}
+                    onClick={togglePlaySpotlightTape}
                     style={{
                       ...styles.playMainBtn,
-                      background: isUnreadPartnerTape
-                        ? "linear-gradient(135deg, #ec4899, #9333ea)"
-                        : "linear-gradient(135deg, #9333ea, #7e22ce)",
+                      background: isAnySpotlightNew
+                        ? "linear-gradient(135deg, #ec4899, #d946ef, #9333ea)"
+                        : "linear-gradient(135deg, #7e22ce, #581c87)",
+                      boxShadow: isAnySpotlightNew ? "0 6px 22px rgba(236, 72, 153, 0.55)" : "none",
                     }}
                   >
-                    {isPlaying ? "⏹ STOP TAPE" : `▶ PLAY (${currentTape.duration_sec || 5}s)`}
-                  </button>
-                  <button
-                    onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
-                    disabled={currentIndex <= 0}
-                    style={styles.navTapeBtn}
-                  >
-                    NEWER ▶
+                    {isPlaying && !playingVaultId
+                      ? "⏹ STOP VOICE TAPE"
+                      : isSpotlightVoiceUnread
+                      ? `▶ PLAY NEW VOICE TAPE (${spotlightTape.duration_sec || 5}s)`
+                      : `▶ REPLAY VOICE TAPE (${spotlightTape.duration_sec || 5}s)`}
                   </button>
                 </div>
               )}
             </>
           ) : (
-            /* POLAROID TAB */
+            /* SPOTLIGHT POLAROID TAB */
             <div style={styles.polaroidTabWrap}>
               {lockStatus.locked ? (
                 <div style={styles.lockedBanner}>🔒 Polaroid is locked: {lockStatus.reason}</div>
-              ) : !currentTape.polaroid_url && !currentTape.note_text ? (
+              ) : !hasSpotlightPolaroid ? (
                 <div style={{ padding: "20px 10px", textAlign: "center", color: "#a78bfa", fontSize: 12 }}>
-                  No photo or note was attached to this tape by {partnerName}.
+                  No Polaroid photo or note was attached to {partnerName}&apos;s latest voice tape.
                 </div>
               ) : (
-                <div style={styles.polaroidFrame}>
-                  <div style={styles.polaroidPhotoArea}>
-                    {currentTape.polaroid_url ? (
-                      <img
-                        src={currentTape.polaroid_url}
-                        alt="Polaroid"
-                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                      />
-                    ) : (
-                      <div style={styles.polaroidDefaultArt}>
-                        <div style={{ fontSize: 28 }}>💜 📻 ✨</div>
-                        <div style={{ fontSize: 12, marginTop: 6, color: "#e9d5ff" }}>Note from {partnerName}</div>
-                      </div>
-                    )}
-
-                    {!currentTape.polaroid_developed && (
-                      <canvas
-                        ref={scratchCanvasRef}
-                        width={280}
-                        height={170}
-                        onMouseMove={(e) => e.buttons === 1 && handleScratchMove(e)}
-                        onTouchMove={handleScratchMove}
-                        style={styles.scratchCanvas}
-                      />
-                    )}
-                  </div>
-
-                  {!currentTape.polaroid_developed && (
-                    <button onClick={markPolaroidRevealed} style={styles.instantRevealBtn}>
-                      ✨ Instant Reveal Photo
-                    </button>
+                <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  {isSpotlightPolaroidUnread && (
+                    <div style={{ ...styles.incomingHighlightBanner, width: "100%", marginBottom: 10 }}>
+                      <span>✨ NEW UNOPENED POLAROID FROM {partnerName.toUpperCase()}</span>
+                    </div>
                   )}
 
-                  <div style={styles.polaroidCaption}>
-                    {currentTape.note_text || `From ${partnerName} with love 💜`}
+                  <div style={styles.polaroidFrame}>
+                    <div style={styles.polaroidPhotoArea}>
+                      {spotlightTape.polaroid_url ? (
+                        <img
+                          src={spotlightTape.polaroid_url}
+                          alt="Polaroid"
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                      ) : (
+                        <div style={styles.polaroidDefaultArt}>
+                          <div style={{ fontSize: 28 }}>💜 📻 ✨</div>
+                          <div style={{ fontSize: 12, marginTop: 6, color: "#e9d5ff" }}>
+                            Note from {partnerName}
+                          </div>
+                        </div>
+                      )}
+
+                      {isSpotlightPolaroidUnread && spotlightTape.polaroid_url && (
+                        <canvas
+                          ref={scratchCanvasRef}
+                          width={280}
+                          height={170}
+                          onMouseMove={(e) => e.buttons === 1 && handleScratchMove(e)}
+                          onTouchMove={handleScratchMove}
+                          style={styles.scratchCanvas}
+                        />
+                      )}
+                    </div>
+
+                    {isSpotlightPolaroidUnread && spotlightTape.polaroid_url && (
+                      <button onClick={markPolaroidRevealed} style={styles.instantRevealBtn}>
+                        ✨ Instant Reveal Photo
+                      </button>
+                    )}
+
+                    <div style={styles.polaroidCaption}>
+                      {spotlightTape.note_text || `From ${partnerName} with love 💜`}
+                    </div>
                   </div>
                 </div>
               )}
@@ -1284,13 +1477,37 @@ export default function WalkieTalkieApp() {
           )}
         </div>
 
-        {/* CLEAN COMPOSER: NOTE + CAMERA/ALBUM + DEDICATED TIME LOCK + RECORD/CANCEL */}
+        {/* ================================================================= */}
+        {/* SEPARATE MEMORY VAULT BAR (WHERE ALL OLDER MESSAGES GO)           */}
+        {/* ================================================================= */}
+        <button
+          type="button"
+          onClick={() => setVaultModalOpen(true)}
+          style={styles.vaultLauncherBtn}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 16 }}>🗄️</span>
+            <div style={{ textAlign: "left" }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: "#f3e8ff" }}>
+                {partnerName}&apos;s Memory Vault (Older Tapes & Polaroids)
+              </div>
+              <div style={{ fontSize: 10, color: "#a78bfa" }}>
+                {vaultTapes.length} archived voice {vaultTapes.length === 1 ? "tape" : "tapes"} •{" "}
+                {vaultPolaroids.length} saved {vaultPolaroids.length === 1 ? "Polaroid" : "Polaroids"}
+              </div>
+            </div>
+          </div>
+          <span style={styles.vaultOpenPill}>Open Vault ▸</span>
+        </button>
+
+        {/* ================================================================= */}
+        {/* CLEAN COMPOSER: NOTE + CAMERA/ALBUM + TIME LOCK + RECORD/CANCEL   */}
+        {/* ================================================================= */}
         <div style={styles.composerCard}>
           <div style={{ fontSize: 11, fontWeight: 800, color: "#d8b4fe", marginBottom: 8 }}>
             🎙️ TRANSMIT TO {partnerName.toUpperCase()}
           </div>
 
-          {/* 1. Note Input + Separate Camera & Album Buttons */}
           <div style={styles.composerInputRow}>
             <input
               type="text"
@@ -1304,12 +1521,11 @@ export default function WalkieTalkieApp() {
               type="button"
               onClick={() => openLiveCamera("user")}
               style={styles.photoUploadBtn}
-              title="Take a photo with camera"
             >
               📸 Camera
             </button>
 
-            <label style={styles.photoUploadBtn} title="Choose photo from album">
+            <label style={styles.photoUploadBtn}>
               🖼️ Album
               <input
                 type="file"
@@ -1326,7 +1542,6 @@ export default function WalkieTalkieApp() {
             </label>
           </div>
 
-          {/* Attached Photo Thumbnail Preview */}
           {polaroidDataUrl && (
             <div style={styles.photoPreviewRow}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1346,7 +1561,6 @@ export default function WalkieTalkieApp() {
             </div>
           )}
 
-          {/* 2. Separate Delivery Timing Option (Instant vs Open After Time) */}
           <div style={styles.deliveryBox}>
             <div style={styles.deliveryModeRow}>
               <button
@@ -1387,7 +1601,6 @@ export default function WalkieTalkieApp() {
             )}
           </div>
 
-          {/* 3. Recording Controls with Explicit CANCEL and SEND Buttons */}
           {!isRecording ? (
             <button
               type="button"
@@ -1413,18 +1626,10 @@ export default function WalkieTalkieApp() {
                 🔴 Recording voice note... <strong>{recSeconds}s</strong>
               </div>
               <div style={styles.recordActionsRow}>
-                <button
-                  type="button"
-                  onClick={cancelRecording}
-                  style={styles.cancelRecBtn}
-                >
+                <button type="button" onClick={cancelRecording} style={styles.cancelRecBtn}>
                   🗑️ Cancel
                 </button>
-                <button
-                  type="button"
-                  onClick={finishAndSendRecording}
-                  style={styles.sendRecBtn}
-                >
+                <button type="button" onClick={finishAndSendRecording} style={styles.sendRecBtn}>
                   ➤ Send to {partnerName} ({recSeconds}s)
                 </button>
               </div>
@@ -1433,10 +1638,9 @@ export default function WalkieTalkieApp() {
 
           {uploadNotice && <div style={styles.sentFooterStatus}>{uploadNotice}</div>}
 
-          {/* Expandable Sent Archive */}
           <div style={{ marginTop: 10, textAlign: "center" }}>
             <button onClick={() => setViewSentArchive((v) => !v)} style={styles.sentArchiveToggle}>
-              {viewSentArchive ? "Hide Sent Archive ▲" : `View My Sent Tapes (${sentTapes.length}) ▼`}
+              {viewSentArchive ? "Hide My Sent Log ▲" : `View My Sent Log (${sentTapes.length}) ▼`}
             </button>
 
             {viewSentArchive && (
@@ -1466,6 +1670,135 @@ export default function WalkieTalkieApp() {
         </div>
       </div>
 
+      {/* =================================================================== */}
+      {/* MEMORY VAULT MODAL (OLDER VOICE TAPES & POLAROID GALLERY)           */}
+      {/* =================================================================== */}
+      {vaultModalOpen && (
+        <div style={styles.modalBackdrop} onClick={() => setVaultModalOpen(false)}>
+          <div style={styles.modalSheet} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: "#f5d0fe" }}>
+                  🗄️ {partnerName}&apos;s Memory Vault
+                </div>
+                <div style={{ fontSize: 11, color: "#a78bfa" }}>
+                  Past voice notes & Polaroids off the main stage
+                </div>
+              </div>
+              <button onClick={() => setVaultModalOpen(false)} style={styles.closeModalBtn}>
+                ✕
+              </button>
+            </div>
+
+            <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+              <button
+                onClick={() => setVaultTab("tapes")}
+                style={{
+                  ...styles.tabBtn,
+                  ...(vaultTab === "tapes" ? styles.tabBtnActive : {}),
+                }}
+              >
+                📼 Past Voice Tapes ({vaultTapes.length})
+              </button>
+              <button
+                onClick={() => setVaultTab("polaroids")}
+                style={{
+                  ...styles.tabBtn,
+                  ...(vaultTab === "polaroids" ? styles.tabBtnActive : {}),
+                }}
+              >
+                🖼️ Polaroid Wall ({vaultPolaroids.length})
+              </button>
+            </div>
+
+            {vaultTab === "tapes" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {vaultTapes.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "24px 10px", color: "#a78bfa", fontSize: 12 }}>
+                    No older voice tapes in the Vault yet.
+                  </div>
+                ) : (
+                  vaultTapes.map((tape, idx) => {
+                    const isThisPlaying = isPlaying && playingVaultId === tape.id;
+                    return (
+                      <div key={tape.id || idx} style={styles.vaultTapeRow}>
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "#f3e8ff" }}>
+                            Tape #{vaultTapes.length - idx} •{" "}
+                            {new Date(tape.created_at).toLocaleDateString([], {
+                              month: "short",
+                              day: "numeric",
+                            })}{" "}
+                            at{" "}
+                            {new Date(tape.created_at).toLocaleTimeString([], {
+                              hour: "numeric",
+                              minute: "2-digit",
+                              hour12: true,
+                            })}
+                          </div>
+                          {tape.note_text && (
+                            <div style={{ fontSize: 11, color: "#d8b4fe", marginTop: 2 }}>
+                              📝 &ldquo;{tape.note_text}&rdquo;
+                            </div>
+                          )}
+                        </div>
+
+                        <button
+                          onClick={() => togglePlayVaultTape(tape)}
+                          style={{
+                            ...styles.vaultPlayBtn,
+                            background: isThisPlaying ? "#ec4899" : "#581c87",
+                          }}
+                        >
+                          {isThisPlaying ? "⏹ Stop" : `▶ Play (${tape.duration_sec || 5}s)`}
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+                {vaultPolaroids.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "24px 10px", color: "#a78bfa", fontSize: 12 }}>
+                    No past Polaroids in the Vault yet.
+                  </div>
+                ) : (
+                  vaultPolaroids.map((tape, idx) => (
+                    <div key={tape.id || idx} style={styles.polaroidFrame}>
+                      {tape.polaroid_url && (
+                        <div style={styles.polaroidPhotoArea}>
+                          <img
+                            src={tape.polaroid_url}
+                            alt="Archived Polaroid"
+                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          />
+                        </div>
+                      )}
+                      <div style={styles.polaroidCaption}>
+                        {tape.note_text || `From ${partnerName} 💜`}
+                      </div>
+                      <div style={{ textAlign: "center", fontSize: 10, color: "#6b21a8", marginTop: 4 }}>
+                        {new Date(tape.created_at).toLocaleDateString([], {
+                          month: "short",
+                          day: "numeric",
+                        })}{" "}
+                        •{" "}
+                        {new Date(tape.created_at).toLocaleTimeString([], {
+                          hour: "numeric",
+                          minute: "2-digit",
+                          hour12: true,
+                        })}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* LIVE IN-APP CAMERA MODAL */}
       {cameraModalOpen && (
         <div style={styles.modalBackdrop} onClick={closeLiveCamera}>
@@ -1478,13 +1811,7 @@ export default function WalkieTalkieApp() {
             </div>
 
             <div style={styles.cameraViewportWrap}>
-              <video
-                ref={cameraVideoRef}
-                autoPlay
-                playsInline
-                muted
-                style={styles.cameraVideo}
-              />
+              <video ref={cameraVideoRef} autoPlay playsInline muted style={styles.cameraVideo} />
             </div>
 
             <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
@@ -1806,44 +2133,100 @@ const styles = {
     borderColor: "#a855f7",
     color: "#ffffff",
   },
+  tabBtnUnreadGlow: {
+    borderColor: "#f472b6",
+    boxShadow: "0 0 12px rgba(236, 72, 153, 0.4)",
+  },
   unreadDot: {
-    background: "#ec4899",
+    background: "linear-gradient(90deg, #ec4899, #f59e0b)",
     color: "#fff",
     fontSize: 8.5,
     fontWeight: 800,
-    padding: "2px 5px",
+    padding: "2px 6px",
+    borderRadius: 999,
+    animation: "badgePulse 1s infinite ease-in-out",
+  },
+  attachedDot: {
+    background: "#7e22ce",
+    color: "#fde047",
+    fontSize: 9,
+    fontWeight: 800,
+    padding: "1px 5px",
     borderRadius: 999,
   },
   deckContainer: {
-    background: "#0f071e",
-    border: "1.5px solid #3b1d6e",
-    borderRadius: 16,
+    border: "2px solid #3b1d6e",
+    borderRadius: 18,
     padding: "12px",
-    marginBottom: 10,
+    marginBottom: 8,
   },
   incomingHighlightBanner: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
     background: "linear-gradient(90deg, #ec4899, #9333ea)",
     color: "#ffffff",
     fontSize: 10.5,
     fontWeight: 800,
-    textAlign: "center",
-    padding: "4px 8px",
-    borderRadius: 6,
+    padding: "5px 10px",
+    borderRadius: 8,
     marginBottom: 8,
+    letterSpacing: 0.4,
+  },
+  liveTagPill: {
+    background: "#fde047",
+    color: "#1e1b4b",
+    fontSize: 8.5,
+    fontWeight: 900,
+    padding: "2px 6px",
+    borderRadius: 999,
+  },
+  listenedStageBanner: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    background: "#190d30",
+    border: "1px solid #3b1d6e",
+    color: "#a78bfa",
+    fontSize: 10,
+    fontWeight: 700,
+    padding: "4px 8px",
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  moveToVaultMiniBtn: {
+    background: "#2e1065",
+    border: "1px solid #7e22ce",
+    color: "#e9d5ff",
+    fontSize: 9.5,
+    fontWeight: 700,
+    padding: "2px 7px",
+    borderRadius: 6,
+    cursor: "pointer",
+  },
+  polaroidAlertStrip: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    border: "1px solid",
+    borderRadius: 8,
+    padding: "6px 9px",
+    fontSize: 10.5,
+    color: "#f5d0fe",
+    marginBottom: 8,
+    cursor: "pointer",
   },
   tapeMetaRow: {
     display: "flex",
     justifyContent: "space-between",
     fontFamily: "'JetBrains Mono', monospace",
     fontSize: 9.5,
-    color: "#c4b5fd",
     marginBottom: 6,
   },
   cassetteWindow: {
     display: "flex",
     justifyContent: "space-around",
     alignItems: "center",
-    background: "#190d30",
     border: "1px solid #4c1d95",
     borderRadius: 12,
     padding: "12px 8px",
@@ -1867,10 +2250,10 @@ const styles = {
   },
   cassetteCenterLabel: {
     textAlign: "center",
-    padding: "5px 8px",
+    padding: "5px 10px",
     borderRadius: 8,
     background: "#120824",
-    border: "1px solid #3b1d6e",
+    border: "1px solid #4c1d95",
   },
   lockedBanner: {
     background: "rgba(147, 51, 234, 0.16)",
@@ -1883,25 +2266,56 @@ const styles = {
     display: "flex",
     gap: 6,
   },
-  navTapeBtn: {
-    padding: "8px 10px",
-    borderRadius: 8,
-    background: "#1b1033",
-    border: "1px solid #3b1d6e",
-    color: "#d8b4fe",
-    fontSize: 10.5,
-    fontWeight: 700,
-    cursor: "pointer",
-  },
   playMainBtn: {
     flex: 1,
-    padding: "9px",
-    borderRadius: 8,
-    border: "1px solid #f472b6",
+    padding: "11px",
+    borderRadius: 10,
+    border: "1.5px solid #fbcfe8",
     color: "#ffffff",
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: 800,
     cursor: "pointer",
+    letterSpacing: 0.4,
+  },
+  vaultLauncherBtn: {
+    width: "100%",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    background: "#170d2e",
+    border: "1px solid #4c1d95",
+    borderRadius: 14,
+    padding: "9px 12px",
+    marginBottom: 10,
+    cursor: "pointer",
+  },
+  vaultOpenPill: {
+    background: "#2e1065",
+    border: "1px solid #7e22ce",
+    color: "#e9d5ff",
+    fontSize: 10.5,
+    fontWeight: 700,
+    padding: "4px 9px",
+    borderRadius: 999,
+  },
+  vaultTapeRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    background: "#1c1036",
+    border: "1px solid #3b1d6e",
+    borderRadius: 10,
+    padding: "9px 11px",
+  },
+  vaultPlayBtn: {
+    border: "1px solid #c084fc",
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: 700,
+    padding: "6px 10px",
+    borderRadius: 8,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
   },
   polaroidTabWrap: {
     display: "flex",
@@ -1942,12 +2356,12 @@ const styles = {
   instantRevealBtn: {
     width: "100%",
     marginTop: 6,
-    padding: "4px",
+    padding: "5px",
     fontSize: 10.5,
-    fontWeight: 700,
-    color: "#7e22ce",
-    background: "#f3e8ff",
-    border: "1px solid #d8b4fe",
+    fontWeight: 800,
+    color: "#ffffff",
+    background: "linear-gradient(90deg, #ec4899, #9333ea)",
+    border: "none",
     borderRadius: 6,
     cursor: "pointer",
   },
@@ -2188,7 +2602,7 @@ const styles = {
     border: "1.5px solid #581c87",
     borderRadius: 20,
     padding: "16px",
-    maxHeight: "80vh",
+    maxHeight: "82vh",
     overflowY: "auto",
   },
   modalHeader: {
