@@ -1,7 +1,0 @@
-frequency-1210/
-├── package.json
-├── public/
-│   └── manifest.json
-└── app/
-    ├── layout.jsx
-    └── page.jsx
