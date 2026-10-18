@@ -1,0 +1,10 @@
+{
+  "name": "12.10 MHz • Sarthak & Jaai",
+  "short_name": "12.10 MHz",
+  "description": "Private Walkie-Talkie Frequency: Bhubaneswar ↔ Greater Noida",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d0818",
+  "theme_color": "#0d0818",
+  "orientation": "portrait"
+}
