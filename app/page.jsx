@@ -9,7 +9,6 @@ const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabase
 
 const PASSCODE = "0507";
 const DISTANCE_KM = 1258;
-// Silent audio fallback to prevent Postgres NOT NULL violations when sending Polaroid only
 const SILENT_AUDIO_CARRIER = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAP8A";
 
 const STATUS_PRESETS = [
@@ -37,11 +36,7 @@ const STATUS_PRESETS = [
   },
 ];
 
-// ============================================================================
-// 20 TACTICAL CO-OP PUZZLES (6 EASY, 6 MEDIUM, 8 HARD)
-// ============================================================================
 const PUZZLE_CATALOG = [
-  // 6 EASY PUZZLES (50s Timer)
   {
     id: 1,
     code: "#01",
@@ -175,8 +170,6 @@ const PUZZLE_CATALOG = [
       return { telemetry: item, options: ["DRONE NORTH", "DRONE WEST", "DRONE EAST", "EXPRESS DROP"], answer };
     },
   },
-
-  // 6 MEDIUM PUZZLES (60s Timer)
   {
     id: 7,
     code: "#07",
@@ -317,8 +310,6 @@ const PUZZLE_CATALOG = [
       return { telemetry: k, sequenceOrder: map[k], buttons: ["1", "2", "5", "7"], step: 0 };
     },
   },
-
-  // 8 HARD PUZZLES (70s Timer - High Stakes)
   {
     id: 13,
     code: "#13",
@@ -528,7 +519,6 @@ function fileToBase64(blob) {
   });
 }
 
-// Aggressive compression to keep images < 30KB so Supabase WebSockets never crash
 function compressImageToDataUrl(file, maxWidth = 380) {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -647,22 +637,18 @@ export default function WalkieTalkieApp() {
   const [myStation, setMyStation] = useState("bbi");
   const [notifEnabled, setNotifEnabled] = useState(false);
 
-  // Top Section: 'radio' | 'bomb'
   const [appSection, setAppSection] = useState("radio");
 
-  // Weather
   const [weather, setWeather] = useState({
     bbi: { temp: "29°C", feels: "32°C", humidity: "65%", wind: "11 km/h", icon: "⛅", condition: "Partly Cloudy" },
     greno: { temp: "28°C", feels: "29°C", humidity: "42%", wind: "8 km/h", icon: "☀️", condition: "Clear Sky" },
   });
 
-  // Stations
   const [stations, setStations] = useState({
     bbi: { station_id: "bbi", display_name: "Sarthak • BBI", city: "Bhubaneswar", current_mood: "Free to talk right now! 🎙️", heart_active: false },
     greno: { station_id: "greno", display_name: "Jaai • GreNo", city: "Greater Noida", current_mood: "Free to talk right now! 🎙️", heart_active: false },
   });
 
-  // Transmissions & Vault
   const [tapes, setTapes] = useState([]);
   const [readTapeIds, setReadTapeIds] = useState([]);
   const [readPolaroidIds, setReadPolaroidIds] = useState([]);
@@ -673,14 +659,12 @@ export default function WalkieTalkieApp() {
   const [playingVaultId, setPlayingVaultId] = useState(null);
   const [nowTs, setNowTs] = useState(Date.now());
 
-  // Modals
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [customStatusInput, setCustomStatusInput] = useState("");
   const [vaultModalOpen, setVaultModalOpen] = useState(false);
   const [vaultTab, setVaultTab] = useState("tapes");
   const [viewSentArchive, setViewSentArchive] = useState(false);
 
-  // Composer State
   const [isRecording, setIsRecording] = useState(false);
   const [recSeconds, setRecSeconds] = useState(0);
   const [noteText, setNoteText] = useState("");
@@ -690,27 +674,21 @@ export default function WalkieTalkieApp() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadNotice, setUploadNotice] = useState("");
 
-  // Live Camera
   const [cameraModalOpen, setCameraModalOpen] = useState(false);
   const [cameraFacing, setCameraFacing] = useState("user");
 
-  // Presence & Biometric Sync
   const [partnerOnline, setPartnerOnline] = useState(false);
   const [myThumbDown, setMyThumbDown] = useState(false);
   const [partnerThumbDown, setPartnerThumbDown] = useState(false);
   const [syncSeconds, setSyncSeconds] = useState(0);
 
-  // =========================================================================
-  // BOMB CO-OP (SYNCHRONIZED LIVE ACROSS PHONES VIA REALTIME BROADCAST)
-  // =========================================================================
   const [bombRole, setBombRole] = useState("defuser");
   const [poolFilter, setPoolFilter] = useState("ALL");
   const [manualFilter, setManualFilter] = useState("ALL");
   const [manualSearch, setManualSearch] = useState("");
 
-  // Live Synchronized Bomb Session State
   const [bombSession, setBombSession] = useState({
-    status: "idle", // 'idle' | 'running' | 'defused' | 'exploded'
+    status: "idle",
     puzzleId: 1,
     serial: "12X-AB7",
     serialOdd: true,
@@ -723,10 +701,8 @@ export default function WalkieTalkieApp() {
     puzzleData: PUZZLE_CATALOG[0].setup({ serialOdd: true, batteries: 2, ledLit: true }),
   });
 
-  // Local live tick counter
   const [secondsRemaining, setSecondsRemaining] = useState(50);
 
-  // Refs
   const scratchCanvasRef = useRef(null);
   const audioPlayerRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -742,7 +718,6 @@ export default function WalkieTalkieApp() {
   const myName = myStation === "bbi" ? "Sarthak" : "Jaai";
   const partnerName = myStation === "bbi" ? "Jaai" : "Sarthak";
 
-  // Load Saved Pin & Local Storage
   useEffect(() => {
     const savedPin = localStorage.getItem("freq1210_pin");
     const savedStation = localStorage.getItem("freq1210_station");
@@ -764,18 +739,12 @@ export default function WalkieTalkieApp() {
     return () => clearInterval(clock);
   }, []);
 
-  // Broadcast Helper
   const broadcastSyncEvent = (event, payload) => {
     if (presenceChannelRef.current) {
-      presenceChannelRef.current.send({
-        type: "broadcast",
-        event,
-        payload,
-      });
+      presenceChannelRef.current.send({ type: "broadcast", event, payload });
     }
   };
 
-  // Weather Fetching
   useEffect(() => {
     async function fetchDetailedWeather() {
       try {
@@ -807,7 +776,6 @@ export default function WalkieTalkieApp() {
     fetchDetailedWeather();
   }, []);
 
-  // Supabase Data & Live Channel Handlers
   useEffect(() => {
     if (!unlocked || !supabase) return;
 
@@ -860,7 +828,6 @@ export default function WalkieTalkieApp() {
           if (newTape.sender !== myStation) {
             playRadioBurst(190);
             if (navigator.vibrate) navigator.vibrate([120, 80, 160]);
-            // If it's a Polaroid-only message, auto-switch to Polaroid view
             if (!newTape.audio_url || newTape.audio_url === SILENT_AUDIO_CARRIER) {
               setActiveTab("polaroid");
             } else {
@@ -877,7 +844,6 @@ export default function WalkieTalkieApp() {
       })
       .subscribe();
 
-    // Combined Live Presence & Live Bomb Co-Op Broadcast Channel
     const liveChannel = supabase.channel("freq-1210-live", {
       config: { presence: { key: myStation } },
     });
@@ -894,7 +860,6 @@ export default function WalkieTalkieApp() {
         }
       })
       .on("broadcast", { event: "bomb_action" }, ({ payload }) => {
-        // Live Bomb Action Sync
         if (payload.type === "start") {
           soundBeep();
           setBombSession(payload.session);
@@ -925,7 +890,6 @@ export default function WalkieTalkieApp() {
     };
   }, [unlocked, myStation, partnerStation, partnerName]);
 
-  // Synchronized Countdown Engine
   useEffect(() => {
     if (bombSession.status !== "running") return;
 
@@ -950,7 +914,6 @@ export default function WalkieTalkieApp() {
     return () => clearInterval(interval);
   }, [bombSession]);
 
-  // Biometric Heartbeat Loop
   useEffect(() => {
     if (!myThumbDown || !partnerThumbDown) {
       setSyncSeconds(0);
@@ -974,9 +937,6 @@ export default function WalkieTalkieApp() {
     };
   }, [myThumbDown, partnerThumbDown]);
 
-  // =========================================================================
-  // LIVE BOMB START / ABORT / PLAY METHODS
-  // =========================================================================
   const activePuzzle = useMemo(() => {
     return PUZZLE_CATALOG.find((p) => p.id === bombSession.puzzleId) || PUZZLE_CATALOG[0];
   }, [bombSession.puzzleId]);
@@ -997,12 +957,7 @@ export default function WalkieTalkieApp() {
     const batteries = Math.floor(Math.random() * 3) + 1;
     const ledLit = Math.random() > 0.45;
 
-    const baseBomb = {
-      serial: `12X-${l1}${l2}${lastDigit}`,
-      serialOdd,
-      batteries,
-      ledLit,
-    };
+    const baseBomb = { serial: `12X-${l1}${l2}${lastDigit}`, serialOdd, batteries, ledLit };
 
     const newSession = {
       status: "running",
@@ -1142,9 +1097,6 @@ export default function WalkieTalkieApp() {
     }
   };
 
-  // =========================================================================
-  // RADIO HELPERS & SCRATCH CANVAS
-  // =========================================================================
   const incomingTapes = useMemo(() => {
     return tapes.filter((t) => t.sender !== myStation);
   }, [tapes, myStation]);
@@ -1156,12 +1108,6 @@ export default function WalkieTalkieApp() {
   const latestIncoming = incomingTapes[0] || null;
   const spotlightTape =
     latestIncoming && !vaultedTapeIds.includes(latestIncoming.id) ? latestIncoming : null;
-
-  const isVoiceOnly = Boolean(
-    spotlightTape &&
-      (!spotlightTape.polaroid_url && !spotlightTape.note_text) &&
-      (spotlightTape.audio_url && spotlightTape.audio_url !== SILENT_AUDIO_CARRIER)
-  );
 
   const isPolaroidOnly = Boolean(
     spotlightTape &&
@@ -1216,7 +1162,6 @@ export default function WalkieTalkieApp() {
     return { locked: false, reason: "" };
   }, [spotlightTape, nowTs]);
 
-  // Robust Scratch Canvas Initialization
   useEffect(() => {
     if (appSection !== "radio" || activeTab !== "polaroid" || !spotlightTape || !isSpotlightPolaroidUnread) return;
     const canvas = scratchCanvasRef.current;
@@ -1308,44 +1253,6 @@ export default function WalkieTalkieApp() {
       localStorage.setItem("freq1210_vaulted_tapes", JSON.stringify(next));
       return next;
     });
-  };
-
-  const selectStatus = async (status) => {
-    setStations((prev) => ({
-      ...prev,
-      [myStation]: { ...prev[myStation], current_mood: status },
-    }));
-    setStatusModalOpen(false);
-    if (supabase) {
-      await supabase
-        .from("station_status")
-        .update({ current_mood: status, updated_at: new Date().toISOString() })
-        .eq("station_id", myStation);
-    }
-  };
-
-  const toggleHeartSignal = async () => {
-    const nextVal = !Boolean(stations[myStation]?.heart_active);
-    const nowIso = new Date().toISOString();
-    if (nextVal && navigator.vibrate) navigator.vibrate([50, 80, 100]);
-
-    setStations((prev) => ({
-      ...prev,
-      [myStation]: { ...prev[myStation], heart_active: nextVal, heart_updated_at: nowIso },
-    }));
-
-    if (supabase) {
-      await supabase
-        .from("station_status")
-        .update({ heart_active: nextVal, heart_updated_at: nowIso })
-        .eq("station_id", myStation);
-    }
-  };
-
-  const handleThumbState = (down) => {
-    setMyThumbDown(down);
-    if (down && navigator.vibrate) navigator.vibrate(35);
-    broadcastSyncEvent("thumb", { station: myStation, down });
   };
 
   const togglePlaySpotlightTape = async () => {
@@ -1502,7 +1409,6 @@ export default function WalkieTalkieApp() {
     mediaRecorderRef.current.stop();
   };
 
-  // SEND POLAROID ONLY (NO VOICE REQUIRED)
   const sendPolaroidOnly = async () => {
     if (!polaroidDataUrl && !noteText.trim()) {
       alert("Please add a photo or note first before sending.");
@@ -1511,7 +1417,6 @@ export default function WalkieTalkieApp() {
     await uploadAndSend(null, "audio/wav", true);
   };
 
-  // Master Upload
   const uploadAndSend = async (audioBlob, mimeType, isPolaroidOnlyMode) => {
     setIsUploading(true);
     setUploadNotice(isPolaroidOnlyMode ? "Transmitting Polaroid..." : "Transmitting Voice Tape...");
@@ -1589,24 +1494,6 @@ export default function WalkieTalkieApp() {
     }
   };
 
-  const handlePinDigit = (digit) => {
-    const next = (pinInput + digit).slice(0, 4);
-    setPinInput(next);
-    setPinError(false);
-    if (next.length === 4) {
-      if (next === PASSCODE) {
-        localStorage.setItem("freq1210_pin", PASSCODE);
-        localStorage.setItem("freq1210_station", myStation);
-        playRadioBurst(160);
-        setUnlocked(true);
-      } else {
-        setPinError(true);
-        setTimeout(() => setPinInput(""), 500);
-      }
-    }
-  };
-
-  // LOCK SCREEN
   if (!unlocked) {
     return (
       <div style={styles.screenWrap}>
@@ -1616,29 +1503,17 @@ export default function WalkieTalkieApp() {
           <p style={{ margin: "0 0 16px", fontSize: 13, color: "#c4b5fd" }}>Enter 4-digit passcode</p>
 
           <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
-            <button
-              onClick={() => setMyStation("bbi")}
-              style={{ ...styles.stationSelectBtn, ...(myStation === "bbi" ? styles.stationSelectBtnActive : {}) }}
-            >
+            <button onClick={() => setMyStation("bbi")} style={{ ...styles.stationSelectBtn, ...(myStation === "bbi" ? styles.stationSelectBtnActive : {}) }}>
               📡 Sarthak • BBI
             </button>
-            <button
-              onClick={() => setMyStation("greno")}
-              style={{ ...styles.stationSelectBtn, ...(myStation === "greno" ? styles.stationSelectBtnActive : {}) }}
-            >
+            <button onClick={() => setMyStation("greno")} style={{ ...styles.stationSelectBtn, ...(myStation === "greno" ? styles.stationSelectBtnActive : {}) }}>
               📻 Jaai • GreNo
             </button>
           </div>
 
           <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 16 }}>
             {[0, 1, 2, 3].map((i) => (
-              <div
-                key={i}
-                style={{
-                  ...styles.pinDot,
-                  background: pinError ? "#f43f5e" : pinInput.length > i ? "#c084fc" : "#24173d",
-                }}
-              />
+              <div key={i} style={{ ...styles.pinDot, background: pinError ? "#f43f5e" : pinInput.length > i ? "#c084fc" : "#24173d" }} />
             ))}
           </div>
 
@@ -1669,102 +1544,42 @@ export default function WalkieTalkieApp() {
   return (
     <div style={styles.screenWrap}>
       <style>{`
-        @keyframes pulseHeart {
-          0%, 100% { transform: scale(1); filter: drop-shadow(0 0 6px #f472b6); }
-          50% { transform: scale(1.24); filter: drop-shadow(0 0 18px #ec4899); }
-        }
-        @keyframes spinReel {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        @keyframes spotlightGlow {
-          0%, 100% { box-shadow: 0 0 18px rgba(236,72,153,0.55), inset 0 0 18px rgba(236,72,153,0.2); border-color: #f472b6; }
-          50% { box-shadow: 0 0 34px rgba(244,114,182,0.9), inset 0 0 26px rgba(236,72,153,0.35); border-color: #fde047; }
-        }
-        @keyframes alarmPulse {
-          0%, 100% { box-shadow: 0 0 10px #f43f5e; }
-          50% { box-shadow: 0 0 26px #f43f5e; }
-        }
+        @keyframes pulseHeart { 0%, 100% { transform: scale(1); filter: drop-shadow(0 0 6px #f472b6); } 50% { transform: scale(1.24); filter: drop-shadow(0 0 18px #ec4899); } }
+        @keyframes spinReel { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes spotlightGlow { 0%, 100% { box-shadow: 0 0 18px rgba(236,72,153,0.55), inset 0 0 18px rgba(236,72,153,0.2); border-color: #f472b6; } 50% { box-shadow: 0 0 34px rgba(244,114,182,0.9), inset 0 0 26px rgba(236,72,153,0.35); border-color: #fde047; } }
+        @keyframes alarmPulse { 0%, 100% { box-shadow: 0 0 10px #f43f5e; } 50% { box-shadow: 0 0 26px #f43f5e; } }
       `}</style>
 
-      <audio
-        ref={audioPlayerRef}
-        onEnded={() => {
-          playRadioBurst(140);
-          setIsPlaying(false);
-          setPlayingVaultId(null);
-        }}
-      />
+      <audio ref={audioPlayerRef} onEnded={() => { playRadioBurst(140); setIsPlaying(false); setPlayingVaultId(null); }} />
 
       <div style={styles.radioChassis}>
-        {/* TOP LEVEL NAVIGATION (2 SECTIONS) */}
         <div style={styles.sectionNavWrap}>
-          <button
-            type="button"
-            onClick={() => setAppSection("radio")}
-            style={{ ...styles.sectionNavBtn, ...(appSection === "radio" ? styles.sectionNavBtnActive : {}) }}
-          >
-            📻 12.10 MHz Radio
-            {isAnySpotlightNew && <span style={styles.unreadDot}>NEW</span>}
+          <button type="button" onClick={() => setAppSection("radio")} style={{ ...styles.sectionNavBtn, ...(appSection === "radio" ? styles.sectionNavBtnActive : {}) }}>
+            📻 12.10 MHz Radio {isAnySpotlightNew && <span style={styles.unreadDot}>NEW</span>}
           </button>
-          <button
-            type="button"
-            onClick={() => setAppSection("bomb")}
-            style={{
-              ...styles.sectionNavBtn,
-              ...(appSection === "bomb" ? styles.sectionNavBtnActive : {}),
-              ...(bombSession.status === "running" ? { borderColor: "#f43f5e", animation: "alarmPulse 1.2s infinite" } : {}),
-            }}
-          >
+          <button type="button" onClick={() => setAppSection("bomb")} style={{ ...styles.sectionNavBtn, ...(appSection === "bomb" ? styles.sectionNavBtnActive : {}), ...(bombSession.status === "running" ? { borderColor: "#f43f5e", animation: "alarmPulse 1.2s infinite" } : {}) }}>
             💣 Bomb Co-Op {bombSession.status === "running" ? "🔥 LIVE" : "(20)"}
           </button>
         </div>
 
-        {/* STATUS BAR */}
         <div style={styles.topUtilityBar}>
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <div style={styles.streakPill}>🔥 {streakDays}d Streak</div>
-            <button
-              onClick={requestNotificationAccess}
-              style={{
-                ...styles.notifBtn,
-                borderColor: notifEnabled ? "#a855f7" : "#3b1d6e",
-                color: notifEnabled ? "#e9d5ff" : "#a78bfa",
-              }}
-            >
+            <button onClick={requestNotificationAccess} style={{ ...styles.notifBtn, borderColor: notifEnabled ? "#a855f7" : "#3b1d6e", color: notifEnabled ? "#e9d5ff" : "#a78bfa" }}>
               {notifEnabled ? "🔔 Alerts ON" : "🔕 Enable Alerts"}
             </button>
           </div>
-
-          <button
-            onClick={() => {
-              const next = myStation === "bbi" ? "greno" : "bbi";
-              setMyStation(next);
-              localStorage.setItem("freq1210_station", next);
-            }}
-            style={styles.miniSwitchBtn}
-          >
+          <button onClick={() => { const next = myStation === "bbi" ? "greno" : "bbi"; setMyStation(next); localStorage.setItem("freq1210_station", next); }} style={styles.miniSwitchBtn}>
             {myStation === "bbi" ? "Sarthak • BBI" : "Jaai • GreNo"} ⇄
           </button>
         </div>
 
-        {/* ================================================================= */}
-        {/* SECTION 1: 12.10 MHz WALKIE-TALKIE RADIO                          */}
-        {/* ================================================================= */}
         {appSection === "radio" ? (
           <>
-            {/* WEATHER BRIDGE */}
             <div style={styles.bridgeCard}>
               <div style={styles.bridgeHeaderRow}>
                 <span style={styles.freqDialText}>12.10 MHz</span>
-                <span
-                  style={{
-                    ...styles.livePresenceBadge,
-                    background: partnerOnline ? "rgba(236, 72, 153, 0.2)" : "rgba(168, 85, 247, 0.14)",
-                    borderColor: partnerOnline ? "#f472b6" : "#4c1d95",
-                    color: partnerOnline ? "#fbcfe8" : "#c4b5fd",
-                  }}
-                >
+                <span style={{ ...styles.livePresenceBadge, background: partnerOnline ? "rgba(236, 72, 153, 0.2)" : "rgba(168, 85, 247, 0.14)", borderColor: partnerOnline ? "#f472b6" : "#4c1d95", color: partnerOnline ? "#fbcfe8" : "#c4b5fd" }}>
                   {partnerOnline ? "✨ BOTH TUNED IN LIVE" : `${DISTANCE_KM.toLocaleString()} KM BRIDGE`}
                 </span>
               </div>
@@ -1776,10 +1591,7 @@ export default function WalkieTalkieApp() {
                     <span style={styles.tempHighlight}>{weather.bbi.temp}</span>
                   </div>
                   <div style={styles.weatherConditionLine}>{weather.bbi.icon} Bhubaneswar • {weather.bbi.condition}</div>
-                  <div style={styles.weatherMicroMeta}>
-                    <span>Feels {weather.bbi.feels}</span>
-                    <span>💧 {weather.bbi.humidity}</span>
-                  </div>
+                  <div style={styles.weatherMicroMeta}><span>Feels {weather.bbi.feels}</span><span>💧 {weather.bbi.humidity}</span></div>
                   <div style={styles.cityMoodPill}>{stations.bbi?.current_mood}</div>
                 </div>
 
@@ -1791,10 +1603,7 @@ export default function WalkieTalkieApp() {
                     <span style={styles.tempHighlight}>{weather.greno.temp}</span>
                   </div>
                   <div style={styles.weatherConditionLine}>{weather.greno.icon} Greater Noida • {weather.greno.condition}</div>
-                  <div style={styles.weatherMicroMeta}>
-                    <span>Feels {weather.greno.feels}</span>
-                    <span>💧 {weather.greno.humidity}</span>
-                  </div>
+                  <div style={styles.weatherMicroMeta}><span>Feels {weather.greno.feels}</span><span>💧 {weather.greno.humidity}</span></div>
                   <div style={styles.cityMoodPill}>{stations.greno?.current_mood}</div>
                 </div>
               </div>
@@ -1805,74 +1614,32 @@ export default function WalkieTalkieApp() {
               </button>
             </div>
 
-            {/* HEART BUTTON */}
-            <div
-              style={{
-                ...styles.heartSectionCard,
-                borderColor: partnerHeartOn ? "#ec4899" : myHeartOn ? "#9333ea" : "#3b1d6e",
-                background: partnerHeartOn ? "rgba(236, 72, 153, 0.18)" : "#190e30",
-              }}
-            >
+            <div style={{ ...styles.heartSectionCard, borderColor: partnerHeartOn ? "#ec4899" : myHeartOn ? "#9333ea" : "#3b1d6e", background: partnerHeartOn ? "rgba(236, 72, 153, 0.18)" : "#190e30" }}>
               <div style={{ flex: 1 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontSize: 16, animation: partnerHeartOn ? "pulseHeart 1.1s infinite" : "none" }}>
-                    {partnerHeartOn ? "💓" : myHeartOn ? "📡" : "💜"}
-                  </span>
+                  <span style={{ fontSize: 16, animation: partnerHeartOn ? "pulseHeart 1.1s infinite" : "none" }}>{partnerHeartOn ? "💓" : myHeartOn ? "📡" : "💜"}</span>
                   <span style={{ fontSize: 13, fontWeight: 800, color: "#f5d0fe" }}>
-                    {myHeartOn && partnerHeartOn
-                      ? "Both Hearts Beating Together!"
-                      : partnerHeartOn
-                      ? `${partnerName}'s heart is beating for you!`
-                      : myHeartOn
-                      ? `Pulsing on ${partnerName}'s Screen...`
-                      : "Thinking of You Signal"}
+                    {myHeartOn && partnerHeartOn ? "Both Hearts Beating Together!" : partnerHeartOn ? `${partnerName}'s heart is beating for you!` : myHeartOn ? `Pulsing on ${partnerName}'s Screen...` : "Thinking of You Signal"}
                   </span>
                 </div>
               </div>
-
-              <button
-                onClick={toggleHeartSignal}
-                style={{
-                  ...styles.heartToggleBtn,
-                  background: myHeartOn ? "linear-gradient(135deg, #ec4899, #9333ea)" : "#1e1336",
-                  borderColor: myHeartOn ? "#f472b6" : "#4c1d95",
-                }}
-              >
+              <button onClick={toggleHeartSignal} style={{ ...styles.heartToggleBtn, background: myHeartOn ? "linear-gradient(135deg, #ec4899, #9333ea)" : "#1e1336", borderColor: myHeartOn ? "#f472b6" : "#4c1d95" }}>
                 <span style={{ fontSize: 11, fontWeight: 800 }}>{myHeartOn ? "SENT: ON" : "SEND"}</span>
               </button>
             </div>
 
-            {/* SPOTLIGHT TABS */}
             <div style={styles.tabBar}>
-              <button
-                onClick={() => setActiveTab("tape")}
-                style={{ ...styles.tabBtn, ...(activeTab === "tape" ? styles.tabBtnActive : {}) }}
-              >
-                📻 {partnerName}&apos;s Latest Voice
-                {isSpotlightVoiceUnread && <span style={styles.unreadDot}>NEW</span>}
+              <button onClick={() => setActiveTab("tape")} style={{ ...styles.tabBtn, ...(activeTab === "tape" ? styles.tabBtnActive : {}) }}>
+                📻 {partnerName}&apos;s Latest Voice {isSpotlightVoiceUnread && <span style={styles.unreadDot}>NEW</span>}
               </button>
-
-              <button
-                onClick={() => setActiveTab("polaroid")}
-                style={{ ...styles.tabBtn, ...(activeTab === "polaroid" ? styles.tabBtnActive : {}) }}
-              >
-                📸 {partnerName}&apos;s Polaroid
-                {isSpotlightPolaroidUnread ? <span style={styles.unreadDot}>NEW PHOTO</span> : hasSpotlightPolaroid && <span style={{ color: "#fde047" }}>✦</span>}
+              <button onClick={() => setActiveTab("polaroid")} style={{ ...styles.tabBtn, ...(activeTab === "polaroid" ? styles.tabBtnActive : {}) }}>
+                📸 {partnerName}&apos;s Polaroid {isSpotlightPolaroidUnread ? <span style={styles.unreadDot}>NEW PHOTO</span> : hasSpotlightPolaroid && <span style={{ color: "#fde047" }}>✦</span>}
               </button>
             </div>
 
-            {/* SPOTLIGHT STAGE */}
-            <div
-              style={{
-                ...styles.deckContainer,
-                borderColor: isAnySpotlightNew ? "#f472b6" : "#3b1d6e",
-                animation: isAnySpotlightNew ? "spotlightGlow 2s infinite" : "none",
-              }}
-            >
+            <div style={{ ...styles.deckContainer, borderColor: isAnySpotlightNew ? "#f472b6" : "#3b1d6e", animation: isAnySpotlightNew ? "spotlightGlow 2s infinite" : "none" }}>
               {!spotlightTape ? (
-                <div style={{ textAlign: "center", padding: "20px 10px", color: "#c4b5fd", fontSize: 12 }}>
-                  Waiting for {partnerName}&apos;s next transmission...
-                </div>
+                <div style={{ textAlign: "center", padding: "20px 10px", color: "#c4b5fd", fontSize: 12 }}>Waiting for {partnerName}&apos;s next transmission...</div>
               ) : activeTab === "tape" ? (
                 <>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#c4b5fd", marginBottom: 6 }}>
@@ -1884,50 +1651,27 @@ export default function WalkieTalkieApp() {
                     <div style={{ textAlign: "center", padding: "16px 10px", background: "#1a0f30", borderRadius: 12, border: "1px solid #4c1d95" }}>
                       <div style={{ fontSize: 18, marginBottom: 4 }}>📸</div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: "#f5d0fe" }}>Polaroid-Only Transmission</div>
-                      <div style={{ fontSize: 11, color: "#c4b5fd", marginTop: 4 }}>
-                        {partnerName} sent a Polaroid note without voice audio.
-                      </div>
-                      <button
-                        onClick={() => setActiveTab("polaroid")}
-                        style={{ ...styles.instantRevealBtn, width: "auto", padding: "6px 14px", marginTop: 10 }}
-                      >
+                      <div style={{ fontSize: 11, color: "#c4b5fd", marginTop: 4 }}>{partnerName} sent a Polaroid note without voice audio.</div>
+                      <button onClick={() => setActiveTab("polaroid")} style={{ ...styles.instantRevealBtn, width: "auto", padding: "6px 14px", marginTop: 10 }}>
                         Open Polaroid Photo →
                       </button>
                     </div>
                   ) : (
                     <>
                       <div style={styles.cassetteWindow}>
-                        <div style={{ ...styles.reelWheel, animation: isPlaying && !playingVaultId ? "spinReel 2.2s linear infinite" : "none" }}>
-                          <div style={styles.reelCore} />
-                        </div>
+                        <div style={{ ...styles.reelWheel, animation: isPlaying && !playingVaultId ? "spinReel 2.2s linear infinite" : "none" }}><div style={styles.reelCore} /></div>
                         <div style={styles.cassetteCenterLabel}>
                           <div style={{ fontSize: 10, fontWeight: 800, color: "#fde047" }}>12.10 MHz</div>
-                          <div style={{ fontSize: 9.5, color: "#f3e8ff" }}>
-                            {isPlaying && !playingVaultId ? "PLAYING..." : `${spotlightTape.duration_sec || 5}s VOICE TAPE`}
-                          </div>
+                          <div style={{ fontSize: 9.5, color: "#f3e8ff" }}>{isPlaying && !playingVaultId ? "PLAYING..." : `${spotlightTape.duration_sec || 5}s VOICE TAPE`}</div>
                         </div>
-                        <div style={{ ...styles.reelWheel, animation: isPlaying && !playingVaultId ? "spinReel 2.2s linear infinite" : "none" }}>
-                          <div style={styles.reelCore} />
-                        </div>
+                        <div style={{ ...styles.reelWheel, animation: isPlaying && !playingVaultId ? "spinReel 2.2s linear infinite" : "none" }}><div style={styles.reelCore} /></div>
                       </div>
 
                       {lockStatus.locked ? (
                         <div style={styles.lockedBanner}>🔒 {lockStatus.reason}</div>
                       ) : (
-                        <button
-                          onClick={togglePlaySpotlightTape}
-                          style={{
-                            ...styles.playMainBtn,
-                            background: isAnySpotlightNew
-                              ? "linear-gradient(135deg, #ec4899, #9333ea)"
-                              : "linear-gradient(135deg, #7e22ce, #581c87)",
-                          }}
-                        >
-                          {isPlaying && !playingVaultId
-                            ? "⏹ STOP TAPE"
-                            : isSpotlightVoiceUnread
-                            ? `▶ PLAY NEW TAPE (${spotlightTape.duration_sec || 5}s)`
-                            : `▶ REPLAY TAPE (${spotlightTape.duration_sec || 5}s)`}
+                        <button onClick={togglePlaySpotlightTape} style={{ ...styles.playMainBtn, background: isAnySpotlightNew ? "linear-gradient(135deg, #ec4899, #9333ea)" : "linear-gradient(135deg, #7e22ce, #581c87)" }}>
+                          {isPlaying && !playingVaultId ? "⏹ STOP TAPE" : isSpotlightVoiceUnread ? `▶ PLAY NEW TAPE (${spotlightTape.duration_sec || 5}s)` : `▶ REPLAY TAPE (${spotlightTape.duration_sec || 5}s)`}
                         </button>
                       )}
                     </>
@@ -1940,86 +1684,41 @@ export default function WalkieTalkieApp() {
                   ) : (
                     <div style={styles.polaroidFrame}>
                       <div style={styles.polaroidPhotoArea}>
-                        {spotlightTape.polaroid_url ? (
-                          <img src={spotlightTape.polaroid_url} alt="Polaroid" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                        ) : (
-                          <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            💜 📻 ✨
-                          </div>
-                        )}
-
+                        {spotlightTape.polaroid_url ? <img src={spotlightTape.polaroid_url} alt="Polaroid" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>💜 📻 ✨</div>}
                         {isSpotlightPolaroidUnread && spotlightTape.polaroid_url && (
-                          <canvas
-                            ref={scratchCanvasRef}
-                            width={280}
-                            height={170}
-                            style={styles.scratchCanvas}
-                            onMouseMove={(e) => e.buttons === 1 && handleScratchMove(e)}
-                            onTouchMove={handleScratchMove}
-                          />
+                          <canvas ref={scratchCanvasRef} width={280} height={170} style={styles.scratchCanvas} onMouseMove={(e) => e.buttons === 1 && handleScratchMove(e)} onTouchMove={handleScratchMove} />
                         )}
                       </div>
-
                       {isSpotlightPolaroidUnread && spotlightTape.polaroid_url && (
-                        <button onClick={markPolaroidRevealed} style={styles.instantRevealBtn}>
-                          ✨ Instant Reveal Photo
-                        </button>
+                        <button onClick={markPolaroidRevealed} style={styles.instantRevealBtn}>✨ Instant Reveal Photo</button>
                       )}
-
-                      <div style={styles.polaroidCaption}>
-                        {spotlightTape.note_text || `From ${partnerName} with love 💜`}
-                      </div>
+                      <div style={styles.polaroidCaption}>{spotlightTape.note_text || `From ${partnerName} with love 💜`}</div>
                     </div>
                   )}
                 </div>
               )}
             </div>
 
-            {/* MEMORY VAULT LAUNCHER */}
             <button type="button" onClick={() => setVaultModalOpen(true)} style={styles.vaultLauncherBtn}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span>🗄️</span>
                 <div style={{ textAlign: "left" }}>
                   <div style={{ fontSize: 11.5, fontWeight: 800, color: "#f3e8ff" }}>Open Memory Vault</div>
-                  <div style={{ fontSize: 9.5, color: "#a78bfa" }}>
-                    {vaultTapes.length} archived tapes • {vaultPolaroids.length} Polaroids
-                  </div>
+                  <div style={{ fontSize: 9.5, color: "#a78bfa" }}>{vaultTapes.length} archived tapes • {vaultPolaroids.length} Polaroids</div>
                 </div>
               </div>
               <span style={{ fontSize: 10, color: "#d8b4fe" }}>View ▸</span>
             </button>
 
-            {/* COMPOSER (SEND POLAROID ONLY OR VOICE TAPE) */}
             <div style={styles.composerCard}>
-              <div style={{ fontSize: 11, fontWeight: 800, color: "#d8b4fe", marginBottom: 8 }}>
-                🎙️ TRANSMIT TO {partnerName.toUpperCase()}
-              </div>
+              <div style={{ fontSize: 11, fontWeight: 800, color: "#d8b4fe", marginBottom: 8 }}>🎙️ TRANSMIT TO {partnerName.toUpperCase()}</div>
 
               <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-                <input
-                  type="text"
-                  placeholder="Optional Polaroid note..."
-                  value={noteText}
-                  onChange={(e) => setNoteText(e.target.value)}
-                  style={styles.textInput}
-                />
-                <button type="button" onClick={() => openLiveCamera("user")} style={styles.photoUploadBtn}>
-                  📸 Camera
-                </button>
+                <input type="text" placeholder="Optional Polaroid note..." value={noteText} onChange={(e) => setNoteText(e.target.value)} style={styles.textInput} />
+                <button type="button" onClick={() => openLiveCamera("user")} style={styles.photoUploadBtn}>📸 Camera</button>
                 <label style={styles.photoUploadBtn}>
                   🖼️ Album
-                  <input
-                    type="file"
-                    accept="image/*"
-                    style={{ display: "none" }}
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const compressed = await compressImageToDataUrl(file);
-                        setPolaroidDataUrl(compressed);
-                      }
-                    }}
-                  />
+                  <input type="file" accept="image/*" style={{ display: "none" }} onChange={async (e) => { const file = e.target.files?.[0]; if (file) { const compressed = await compressImageToDataUrl(file); setPolaroidDataUrl(compressed); } }} />
                 </label>
               </div>
 
@@ -2029,45 +1728,23 @@ export default function WalkieTalkieApp() {
                     <img src={polaroidDataUrl} alt="Preview" style={{ width: 30, height: 30, borderRadius: 4, objectFit: "cover" }} />
                     <span>✓ Photo ready to transmit</span>
                   </div>
-                  <span onClick={() => setPolaroidDataUrl("")} style={{ cursor: "pointer", color: "#f43f5e", fontSize: 11, fontWeight: 700 }}>
-                    Remove ✕
-                  </span>
+                  <span onClick={() => setPolaroidDataUrl("")} style={{ cursor: "pointer", color: "#f43f5e", fontSize: 11, fontWeight: 700 }}>Remove ✕</span>
                 </div>
               )}
 
-              {/* ACTION BUTTONS: POLAROID ONLY vs VOICE RECORD */}
               <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
-                {/* 1. SEND POLAROID ONLY BUTTON */}
-                <button
-                  type="button"
-                  onClick={sendPolaroidOnly}
-                  disabled={isUploading || isRecording || (!polaroidDataUrl && !noteText.trim())}
-                  style={{
-                    ...styles.sendPolaroidOnlyBtn,
-                    opacity: !polaroidDataUrl && !noteText.trim() ? 0.45 : 1,
-                  }}
-                >
+                <button type="button" onClick={sendPolaroidOnly} disabled={isUploading || isRecording || (!polaroidDataUrl && !noteText.trim())} style={{ ...styles.sendPolaroidOnlyBtn, opacity: !polaroidDataUrl && !noteText.trim() ? 0.45 : 1 }}>
                   📸 Send Polaroid Only
                 </button>
 
-                {/* 2. PUSH TO TALK BUTTON */}
                 {!isRecording ? (
-                  <button
-                    type="button"
-                    onClick={startRecording}
-                    disabled={isUploading}
-                    style={styles.pttButton}
-                  >
+                  <button type="button" onClick={startRecording} disabled={isUploading} style={styles.pttButton}>
                     🎙️ Record Voice Tape
                   </button>
                 ) : (
                   <div style={{ display: "flex", gap: 6, flex: 2 }}>
-                    <button type="button" onClick={cancelRecording} style={styles.cancelRecBtn}>
-                      🗑️
-                    </button>
-                    <button type="button" onClick={finishAndSendRecording} style={styles.sendRecBtn}>
-                      ➤ Send Voice ({recSeconds}s)
-                    </button>
+                    <button type="button" onClick={cancelRecording} style={styles.cancelRecBtn}>🗑️</button>
+                    <button type="button" onClick={finishAndSendRecording} style={styles.sendRecBtn}>➤ Send Voice ({recSeconds}s)</button>
                   </div>
                 )}
               </div>
@@ -2080,130 +1757,76 @@ export default function WalkieTalkieApp() {
           /* SECTION 2: SYNCHRONIZED 20-PUZZLE BOMB CO-OP                    */
           /* =============================================================== */
           <div>
-            {/* ROLE SWITCHER */}
-            <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-              <button
-                type="button"
-                onClick={() => setBombRole("defuser")}
-                style={{ ...styles.bombRoleBtn, ...(bombRole === "defuser" ? styles.bombRoleDefuserActive : {}) }}
-              >
+            <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+              <button type="button" onClick={() => setBombRole("defuser")} style={{ ...styles.bombRoleBtn, ...(bombRole === "defuser" ? styles.bombRoleDefuserActive : {}) }}>
                 💣 DEFUSER (The Bomb)
               </button>
-              <button
-                type="button"
-                onClick={() => setBombRole("expert")}
-                style={{ ...styles.bombRoleBtn, ...(bombRole === "expert" ? styles.bombRoleExpertActive : {}) }}
-              >
+              <button type="button" onClick={() => setBombRole("expert")} style={{ ...styles.bombRoleBtn, ...(bombRole === "expert" ? styles.bombRoleExpertActive : {}) }}>
                 📖 EXPERT (Defusal Manual)
               </button>
             </div>
 
-            {/* LIVE BOMB CONTROLS (START / ABORT / DIFFICULTY) */}
             <div style={{ ...styles.bombHudCard, borderColor: bombSession.status === "running" ? "#f43f5e" : "#4c1d95" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                 <div>
-                  <div style={{ fontSize: 9, fontWeight: 800, color: "#a78bfa" }}>
-                    {bombSession.status === "running" ? "LIVE COUNTDOWN" : "STATUS: STANDBY"}
-                  </div>
+                  <div style={{ fontSize: 9, fontWeight: 800, color: "#a78bfa" }}>{bombSession.status === "running" ? "LIVE COUNTDOWN" : "STATUS: STANDBY"}</div>
                   <div style={styles.digitalTimer}>
-                    {bombSession.status === "running"
-                      ? `${String(Math.floor(secondsRemaining / 60)).padStart(2, "0")}:${String(secondsRemaining % 60).padStart(2, "0")}`
-                      : "00:00"}
+                    {bombSession.status === "running" ? `${String(Math.floor(secondsRemaining / 60)).padStart(2, "0")}:${String(secondsRemaining % 60).padStart(2, "0")}` : "00:00"}
                   </div>
                 </div>
 
                 <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 9, fontWeight: 800, color: "#a78bfa", marginBottom: 4 }}>STRIKES</div>
-                  <div style={{ display: "flex", gap: 5 }}>
+                  <div style={{ fontSize: 9, fontWeight: 800, color: "#a78bfa", marginBottom: 3 }}>STRIKES</div>
+                  <div style={{ display: "flex", gap: 4 }}>
                     {[1, 2, 3].map((s) => (
-                      <div
-                        key={s}
-                        style={{
-                          ...styles.strikeBox,
-                          ...(bombSession.strikes >= s ? styles.strikeBoxHit : {}),
-                        }}
-                      >
-                        X
-                      </div>
+                      <div key={s} style={{ ...styles.strikeBox, ...(bombSession.strikes >= s ? styles.strikeBoxHit : {}) }}>X</div>
                     ))}
                   </div>
                 </div>
 
-                {/* START / ABORT BUTTON */}
                 <div>
                   {bombSession.status === "running" ? (
-                    <button type="button" onClick={abortBombGame} style={styles.abortBombBtn}>
-                      ⏹ ABORT BOMB
-                    </button>
+                    <button type="button" onClick={abortBombGame} style={styles.abortBombBtn}>⏹ ABORT</button>
                   ) : (
-                    <button type="button" onClick={() => startNewBombGame()} style={styles.startBombBtn}>
-                      ▶ START MISSION
-                    </button>
+                    <button type="button" onClick={() => startNewBombGame()} style={styles.startBombBtn}>▶ START</button>
                   )}
                 </div>
               </div>
 
-              {/* LIVE SYNCED EDGEWORK */}
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, paddingTop: 6, borderTop: "1px dashed #2e1759" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, paddingTop: 5, borderTop: "1px dashed #2e1759" }}>
                 <span style={{ ...styles.edgePill, color: "#fde047" }}>SN: {bombSession.serial} ({bombSession.serialOdd ? "ODD" : "EVEN"})</span>
-                <span style={styles.edgePill}>🔋 {bombSession.batteries} {bombSession.batteries === 1 ? "Battery" : "Batteries"}</span>
+                <span style={styles.edgePill}>🔋 {bombSession.batteries} Batt</span>
                 <span style={styles.edgePill}>💡 LED: {bombSession.ledLit ? "LIT" : "UNLIT"}</span>
               </div>
             </div>
 
-            {/* END MESSAGE */}
             {bombSession.status !== "running" && bombSession.status !== "idle" && (
-              <div
-                style={{
-                  textAlign: "center",
-                  padding: "10px",
-                  borderRadius: 12,
-                  marginBottom: 10,
-                  border: "1.5px solid",
-                  background: bombSession.status === "defused" ? "rgba(16,185,129,0.2)" : "rgba(244,63,94,0.25)",
-                  borderColor: bombSession.status === "defused" ? "#10b981" : "#f43f5e",
-                }}
-              >
-                <div style={{ fontSize: 13, fontWeight: 800 }}>{bombSession.endMessage}</div>
+              <div style={{ textAlign: "center", padding: "8px", borderRadius: 10, marginBottom: 8, border: "1.5px solid", background: bombSession.status === "defused" ? "rgba(16,185,129,0.2)" : "rgba(244,63,94,0.25)", borderColor: bombSession.status === "defused" ? "#10b981" : "#f43f5e" }}>
+                <div style={{ fontSize: 12, fontWeight: 800 }}>{bombSession.endMessage}</div>
               </div>
             )}
 
-            {/* DEFUSER VIEW */}
             {bombRole === "defuser" ? (
               <div style={{ ...styles.singleModuleCard, borderColor: bombSession.status === "defused" ? "#10b981" : "#6b21a8" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 800, color: "#f5d0fe" }}>
-                    {activePuzzle.code} // {activePuzzle.title.toUpperCase()}
-                  </span>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 800, color: "#f5d0fe" }}>{activePuzzle.code} // {activePuzzle.title.toUpperCase()}</span>
                   <span style={styles.diffTag}>{activePuzzle.difficulty} ({activePuzzle.timerSec}s)</span>
                 </div>
 
-                <div style={{ fontSize: 11, color: "#c4b5fd", marginBottom: 10 }}>
+                <div style={{ fontSize: 10.5, color: "#c4b5fd", marginBottom: 8 }}>
                   Tell {partnerName} to check <strong>{activePuzzle.code} ({activePuzzle.title})</strong> in the Manual!
                 </div>
 
                 {bombSession.status !== "running" && bombSession.status !== "defused" ? (
-                  <div style={{ textAlign: "center", padding: "24px 10px", color: "#a78bfa" }}>
-                    Bomb is inactive. Tap <strong>▶ START MISSION</strong> above when you and {partnerName} are ready!
+                  <div style={{ textAlign: "center", padding: "20px 10px", color: "#a78bfa", fontSize: 11.5 }}>
+                    Bomb is inactive. Tap <strong>▶ START</strong> above when you and {partnerName} are ready!
                   </div>
                 ) : (
                   <>
-                    {/* WIRES PUZZLE */}
                     {activePuzzle.type === "wires" && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                         {bombSession.puzzleData.wires.map((w, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => handleBombWireCut(idx)}
-                            style={{
-                              ...styles.wireBtn,
-                              background: w.bg,
-                              color: w.text,
-                              opacity: w.cut ? 0.3 : 1,
-                              textDecoration: w.cut ? "line-through" : "none",
-                            }}
-                          >
+                          <button key={idx} type="button" onClick={() => handleBombWireCut(idx)} style={{ ...styles.wireBtn, background: w.bg, color: w.text, opacity: w.cut ? 0.3 : 1, textDecoration: w.cut ? "line-through" : "none" }}>
                             <span>{w.label}</span>
                             <span>{w.cut ? "✂️ CUT" : "✂️ CUT WIRE"}</span>
                           </button>
@@ -2211,47 +1834,31 @@ export default function WalkieTalkieApp() {
                       </div>
                     )}
 
-                    {/* CHOICE PUZZLE */}
                     {activePuzzle.type === "choice" && (
                       <div>
                         <div style={styles.telemetryBox}>
-                          <div style={{ fontSize: 9.5, color: "#a78bfa" }}>CLUE</div>
-                          <div style={{ fontSize: 16, fontWeight: 800, color: "#fde047", marginTop: 2 }}>{bombSession.puzzleData.telemetry}</div>
+                          <div style={{ fontSize: 9, color: "#a78bfa" }}>CLUE</div>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: "#fde047", marginTop: 2 }}>{bombSession.puzzleData.telemetry}</div>
                         </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 7 }}>
                           {bombSession.puzzleData.options.map((opt) => (
-                            <button key={opt} type="button" onClick={() => handleBombChoiceTap(opt)} style={styles.choiceBtn}>
-                              {opt}
-                            </button>
+                            <button key={opt} type="button" onClick={() => handleBombChoiceTap(opt)} style={styles.choiceBtn}>{opt}</button>
                           ))}
                         </div>
                       </div>
                     )}
 
-                    {/* SEQUENCE PUZZLE */}
                     {activePuzzle.type === "sequence" && (
                       <div>
                         <div style={styles.telemetryBox}>
-                          <div style={{ fontSize: 9.5, color: "#a78bfa" }}>
-                            PROGRESS ({bombSession.puzzleData.step}/4 PRESSED)
-                          </div>
-                          <div style={{ fontSize: 15, fontWeight: 800, color: "#fde047", marginTop: 2 }}>
-                            {bombSession.puzzleData.telemetry}
-                          </div>
+                          <div style={{ fontSize: 9, color: "#a78bfa" }}>PROGRESS ({bombSession.puzzleData.step}/4)</div>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: "#fde047", marginTop: 2 }}>{bombSession.puzzleData.telemetry}</div>
                         </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 7 }}>
                           {bombSession.puzzleData.buttons.map((bVal) => {
                             const done = bombSession.puzzleData.sequenceOrder.slice(0, bombSession.puzzleData.step).includes(bVal);
                             return (
-                              <button
-                                key={bVal}
-                                type="button"
-                                onClick={() => !done && handleBombSequenceTap(bVal)}
-                                style={{
-                                  ...styles.choiceBtn,
-                                  ...(done ? { background: "#064e3b", borderColor: "#10b981", color: "#6ee7b7" } : {}),
-                                }}
-                              >
+                              <button key={bVal} type="button" onClick={() => !done && handleBombSequenceTap(bVal)} style={{ ...styles.choiceBtn, ...(done ? { background: "#064e3b", borderColor: "#10b981", color: "#6ee7b7" } : {}) }}>
                                 {bVal}
                               </button>
                             );
@@ -2260,36 +1867,30 @@ export default function WalkieTalkieApp() {
                       </div>
                     )}
 
-                    {/* MULTISTAGE PUZZLE */}
                     {activePuzzle.type === "multistage" && (
                       <div>
                         <div style={styles.telemetryBox}>
-                          <div style={{ fontSize: 9.5, color: "#a78bfa" }}>
-                            STAGE {bombSession.puzzleData.currentStage + 1} / {bombSession.puzzleData.stages.length}
-                          </div>
-                          <div style={{ fontSize: 14, fontWeight: 800, color: "#fde047", marginTop: 2 }}>
+                          <div style={{ fontSize: 9, color: "#a78bfa" }}>STAGE {bombSession.puzzleData.currentStage + 1} / {bombSession.puzzleData.stages.length}</div>
+                          <div style={{ fontSize: 13, fontWeight: 800, color: "#fde047", marginTop: 2 }}>
                             {bombSession.puzzleData.stages[Math.min(bombSession.puzzleData.currentStage, bombSession.puzzleData.stages.length - 1)].prompt}
                           </div>
                         </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 7 }}>
                           {bombSession.puzzleData.options.map((opt) => (
-                            <button key={opt} type="button" onClick={() => handleBombMultistageTap(opt)} style={styles.choiceBtn}>
-                              {opt}
-                            </button>
+                            <button key={opt} type="button" onClick={() => handleBombMultistageTap(opt)} style={styles.choiceBtn}>{opt}</button>
                           ))}
                         </div>
                       </div>
                     )}
 
-                    {/* MAZE PUZZLE */}
                     {activePuzzle.type === "maze" && (() => {
                       const cols = ["A", "B", "C", "D", "E"];
                       const pd = bombSession.puzzleData;
                       return (
                         <div>
                           <div style={styles.telemetryBox}>
-                            <div style={{ fontSize: 9.5, color: "#a78bfa" }}>BEACONS</div>
-                            <div style={{ fontSize: 13, fontWeight: 800, color: "#fde047" }}>
+                            <div style={{ fontSize: 9, color: "#a78bfa" }}>BEACONS</div>
+                            <div style={{ fontSize: 12, fontWeight: 800, color: "#fde047" }}>
                               🟡 {cols[pd.bp.beacons[0][1]]}{pd.bp.beacons[0][0] + 1} &amp; {cols[pd.bp.beacons[1][1]]}{pd.bp.beacons[1][0] + 1}
                             </div>
                           </div>
@@ -2304,7 +1905,7 @@ export default function WalkieTalkieApp() {
                                   const hit = pd.hitMines.includes(`${r},${c}`);
                                   return (
                                     <div key={`${r}-${c}`} style={{ ...styles.mazeCell, borderColor: isBeacon ? "#fde047" : "#2e1759" }}>
-                                      {isPlayer ? "🟢" : isGoal ? "🎯" : hit ? "💥" : isBeacon ? "🟡" : <span style={{ fontSize: 8, color: "#4c1d95" }}>{cols[c]}{r + 1}</span>}
+                                      {isPlayer ? "🟢" : isGoal ? "🎯" : hit ? "💥" : isBeacon ? "🟡" : <span style={{ fontSize: 7.5, color: "#4c1d95" }}>{cols[c]}{r + 1}</span>}
                                     </div>
                                   );
                                 })
@@ -2330,27 +1931,20 @@ export default function WalkieTalkieApp() {
                 )}
               </div>
             ) : (
-              /* EXPERT MANUAL */
               <div style={styles.manualContainer}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: "#38bdf8" }}>📖 DEFUSAL MANUAL</span>
-                  <input
-                    type="text"
-                    placeholder="Search #01–#20..."
-                    value={manualSearch}
-                    onChange={(e) => setManualSearch(e.target.value)}
-                    style={styles.manualSearchField}
-                  />
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <span style={{ fontSize: 11.5, fontWeight: 800, color: "#38bdf8" }}>📖 DEFUSAL MANUAL</span>
+                  <input type="text" placeholder="Search #01–#20..." value={manualSearch} onChange={(e) => setManualSearch(e.target.value)} style={styles.manualSearchField} />
                 </div>
 
-                <div style={{ maxHeight: 380, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ maxHeight: 360, overflowY: "auto", display: "flex", flexDirection: "column", gap: 7 }}>
                   {PUZZLE_CATALOG.filter((p) => !manualSearch || p.code.includes(manualSearch) || p.title.toLowerCase().includes(manualSearch.toLowerCase())).map((p) => (
                     <div key={p.id} style={styles.manualCard}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                        <span style={{ fontSize: 11.5, fontWeight: 800, color: "#38bdf8" }}>{p.code} // {p.title}</span>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: "#38bdf8" }}>{p.code} // {p.title}</span>
                         <span style={styles.diffTag}>{p.difficulty} ({p.timerSec}s)</span>
                       </div>
-                      <div style={{ fontSize: 11, color: "#e9d5ff", lineHeight: 1.4 }}>
+                      <div style={{ fontSize: 10.5, color: "#e9d5ff", lineHeight: 1.35 }}>
                         {p.rules.map((r, i) => (
                           <div key={i}>• {r}</div>
                         ))}
@@ -2364,26 +1958,22 @@ export default function WalkieTalkieApp() {
         )}
       </div>
 
-      {/* MEMORY VAULT MODAL */}
       {vaultModalOpen && (
         <div style={styles.modalBackdrop} onClick={() => setVaultModalOpen(false)}>
           <div style={styles.modalSheet} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <div style={{ fontSize: 14, fontWeight: 800, color: "#f5d0fe" }}>🗄️ Memory Vault</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "#f5d0fe" }}>🗄️ Memory Vault</div>
               <button onClick={() => setVaultModalOpen(false)} style={styles.closeModalBtn}>✕</button>
             </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
               {vaultTapes.map((tape, idx) => (
                 <div key={tape.id || idx} style={styles.vaultTapeRow}>
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 700 }}>Tape #{vaultTapes.length - idx}</div>
-                    {tape.note_text && <div style={{ fontSize: 10, color: "#c4b5fd" }}>&ldquo;{tape.note_text}&rdquo;</div>}
+                    <div style={{ fontSize: 10.5, fontWeight: 700 }}>Tape #{vaultTapes.length - idx}</div>
+                    {tape.note_text && <div style={{ fontSize: 9.5, color: "#c4b5fd" }}>&ldquo;{tape.note_text}&rdquo;</div>}
                   </div>
                   {tape.audio_url && tape.audio_url !== SILENT_AUDIO_CARRIER && (
-                    <button onClick={() => togglePlayVaultTape(tape)} style={styles.vaultPlayBtn}>
-                      ▶ Play
-                    </button>
+                    <button onClick={() => togglePlayVaultTape(tape)} style={styles.vaultPlayBtn}>▶ Play</button>
                   )}
                 </div>
               ))}
@@ -2392,12 +1982,11 @@ export default function WalkieTalkieApp() {
         </div>
       )}
 
-      {/* CAMERA MODAL */}
       {cameraModalOpen && (
         <div style={styles.modalBackdrop} onClick={closeLiveCamera}>
           <div style={styles.cameraModalBox} onClick={(e) => e.stopPropagation()}>
             <video ref={cameraVideoRef} autoPlay playsInline muted style={styles.cameraVideo} />
-            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
               <button type="button" onClick={closeLiveCamera} style={styles.cancelRecBtn}>Close</button>
               <button type="button" onClick={snapCameraPhoto} style={styles.sendRecBtn}>📸 Capture</button>
             </div>
@@ -2405,22 +1994,18 @@ export default function WalkieTalkieApp() {
         </div>
       )}
 
-      {/* STATUS MODAL */}
       {statusModalOpen && (
         <div style={styles.modalBackdrop} onClick={() => setStatusModalOpen(false)}>
           <div style={styles.modalSheet} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-              <span style={{ fontSize: 14, fontWeight: 800 }}>Update Status</span>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 800 }}>Update Status</span>
               <button onClick={() => setStatusModalOpen(false)} style={styles.closeModalBtn}>✕</button>
             </div>
-
             {STATUS_PRESETS.map((group) => (
-              <div key={group.group} style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 10, fontWeight: 800, color: "#a78bfa", marginBottom: 4 }}>{group.group}</div>
+              <div key={group.group} style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 9.5, fontWeight: 800, color: "#a78bfa", marginBottom: 3 }}>{group.group}</div>
                 {group.items.map((item) => (
-                  <button key={item} onClick={() => selectStatus(item)} style={styles.statusListItem}>
-                    {item}
-                  </button>
+                  <button key={item} onClick={() => selectStatus(item)} style={styles.statusListItem}>{item}</button>
                 ))}
               </div>
             ))}
@@ -2435,540 +2020,81 @@ export default function WalkieTalkieApp() {
 // STYLES
 // ---------------------------------------------------------------------------
 const styles = {
-  screenWrap: {
-    minHeight: "100vh",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "flex-start",
-    padding: "10px",
-    background: "radial-gradient(circle at top, #1e1035 0%, #090512 100%)",
-  },
-  radioChassis: {
-    width: "100%",
-    maxWidth: 440,
-    background: "#130b24",
-    border: "1.5px solid #3b1d6e",
-    borderRadius: 24,
-    padding: 12,
-    boxShadow: "0 20px 60px rgba(0,0,0,0.75)",
-  },
-  sectionNavWrap: {
-    display: "flex",
-    gap: 6,
-    background: "#0c0618",
-    padding: 4,
-    borderRadius: 14,
-    border: "1px solid #2e1759",
-    marginBottom: 10,
-  },
-  sectionNavBtn: {
-    flex: 1,
-    padding: "8px 10px",
-    borderRadius: 10,
-    border: "none",
-    background: "transparent",
-    color: "#a78bfa",
-    fontSize: 11.5,
-    fontWeight: 800,
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-  },
-  sectionNavBtnActive: {
-    background: "linear-gradient(135deg, #9333ea, #ec4899)",
-    color: "#ffffff",
-  },
-  topUtilityBar: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  streakPill: {
-    fontSize: 10.5,
-    fontWeight: 700,
-    color: "#f5d0fe",
-    background: "#231242",
-    border: "1px solid #581c87",
-    padding: "3px 8px",
-    borderRadius: 999,
-  },
-  notifBtn: {
-    fontSize: 10,
-    fontWeight: 700,
-    background: "#1b1033",
-    border: "1px solid",
-    padding: "3px 7px",
-    borderRadius: 999,
-    cursor: "pointer",
-  },
-  miniSwitchBtn: {
-    fontSize: 10.5,
-    color: "#c4b5fd",
-    background: "transparent",
-    border: "1px solid #3b1d6e",
-    padding: "3px 7px",
-    borderRadius: 6,
-    cursor: "pointer",
-  },
-  bridgeCard: {
-    background: "#1b1033",
-    border: "1px solid #3b1d6e",
-    borderRadius: 16,
-    padding: 10,
-    marginBottom: 8,
-  },
-  bridgeHeaderRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 6,
-  },
-  freqDialText: {
-    fontFamily: "'JetBrains Mono', monospace",
-    fontSize: 16,
-    fontWeight: 800,
-    color: "#e9d5ff",
-  },
-  livePresenceBadge: {
-    fontSize: 9,
-    fontWeight: 800,
-    padding: "3px 7px",
-    borderRadius: 999,
-    border: "1px solid",
-  },
-  citiesGrid: {
-    display: "flex",
-    alignItems: "stretch",
-    justifyContent: "space-between",
-    gap: 6,
-    marginBottom: 6,
-  },
-  cityBox: {
-    flex: 1,
-    background: "#120924",
-    border: "1px solid #2e1759",
-    borderRadius: 10,
-    padding: "6px 8px",
-  },
+  screenWrap: { minHeight: "100vh", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "10px", background: "radial-gradient(circle at top, #1e1035 0%, #090512 100%)" },
+  radioChassis: { width: "100%", maxWidth: 440, background: "#130b24", border: "1.5px solid #3b1d6e", borderRadius: 24, padding: 12, boxShadow: "0 20px 60px rgba(0,0,0,0.75)" },
+  sectionNavWrap: { display: "flex", gap: 6, background: "#0c0618", padding: 4, borderRadius: 14, border: "1px solid #2e1759", marginBottom: 10 },
+  sectionNavBtn: { flex: 1, padding: "8px 10px", borderRadius: 10, border: "none", background: "transparent", color: "#a78bfa", fontSize: 11.5, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 },
+  sectionNavBtnActive: { background: "linear-gradient(135deg, #9333ea, #ec4899)", color: "#ffffff" },
+  topUtilityBar: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
+  streakPill: { fontSize: 10.5, fontWeight: 700, color: "#f5d0fe", background: "#231242", border: "1px solid #581c87", padding: "3px 8px", borderRadius: 999 },
+  notifBtn: { fontSize: 10, fontWeight: 700, background: "#1b1033", border: "1px solid", padding: "3px 7px", borderRadius: 999, cursor: "pointer" },
+  miniSwitchBtn: { fontSize: 10.5, color: "#c4b5fd", background: "transparent", border: "1px solid #3b1d6e", padding: "3px 7px", borderRadius: 6, cursor: "pointer" },
+  bridgeCard: { background: "#1b1033", border: "1px solid #3b1d6e", borderRadius: 16, padding: 10, marginBottom: 8 },
+  bridgeHeaderRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
+  freqDialText: { fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 800, color: "#e9d5ff" },
+  livePresenceBadge: { fontSize: 9, fontWeight: 800, padding: "3px 7px", borderRadius: 999, border: "1px solid" },
+  citiesGrid: { display: "flex", alignItems: "stretch", justifyContent: "space-between", gap: 6, marginBottom: 6 },
+  cityBox: { flex: 1, background: "#120924", border: "1px solid #2e1759", borderRadius: 10, padding: "6px 8px" },
   cityTitle: { fontSize: 11, fontWeight: 800, color: "#f3e8ff" },
-  tempHighlight: {
-    fontFamily: "'JetBrains Mono', monospace",
-    fontSize: 12,
-    fontWeight: 800,
-    color: "#f472b6",
-  },
+  tempHighlight: { fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 800, color: "#f472b6" },
   weatherConditionLine: { fontSize: 10, color: "#d8b4fe", marginTop: 2 },
   weatherMicroMeta: { display: "flex", gap: 5, fontSize: 8.5, color: "#a78bfa", marginTop: 2 },
-  cityMoodPill: {
-    marginTop: 4,
-    display: "inline-block",
-    fontSize: 9.5,
-    color: "#e9d5ff",
-    background: "#26154a",
-    padding: "2px 5px",
-    borderRadius: 4,
-  },
+  cityMoodPill: { marginTop: 4, display: "inline-block", fontSize: 9.5, color: "#e9d5ff", background: "#26154a", padding: "2px 5px", borderRadius: 4 },
   cityDivider: { display: "flex", alignItems: "center", fontSize: 12, color: "#a855f7", fontWeight: 800 },
-  openStatusModalBtn: {
-    width: "100%",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "6px 8px",
-    borderRadius: 8,
-    background: "#130826",
-    border: "1px dashed #581c87",
-    color: "#e9d5ff",
-    fontSize: 10.5,
-    cursor: "pointer",
-  },
-  heartSectionCard: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    border: "1.5px solid #3b1d6e",
-    borderRadius: 14,
-    padding: "8px 10px",
-    marginBottom: 8,
-  },
-  heartToggleBtn: {
-    padding: "6px 10px",
-    borderRadius: 999,
-    border: "1.5px solid",
-    color: "#fff",
-    cursor: "pointer",
-  },
-  tabBar: {
-    display: "flex",
-    gap: 6,
-    marginBottom: 6,
-  },
-  tabBtn: {
-    flex: 1,
-    padding: "7px",
-    borderRadius: 8,
-    background: "#190e30",
-    border: "1px solid #2e1759",
-    color: "#a78bfa",
-    fontSize: 11,
-    fontWeight: 700,
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-  },
-  tabBtnActive: {
-    background: "#3b156b",
-    borderColor: "#a855f7",
-    color: "#ffffff",
-  },
-  unreadDot: {
-    background: "linear-gradient(90deg, #ec4899, #f59e0b)",
-    color: "#fff",
-    fontSize: 8,
-    fontWeight: 800,
-    padding: "1px 5px",
-    borderRadius: 999,
-  },
-  deckContainer: {
-    border: "2px solid #3b1d6e",
-    borderRadius: 16,
-    padding: 10,
-    marginBottom: 8,
-  },
-  cassetteWindow: {
-    display: "flex",
-    justifyContent: "space-around",
-    alignItems: "center",
-    border: "1px solid #4c1d95",
-    borderRadius: 10,
-    padding: "10px 8px",
-    marginBottom: 8,
-    background: "#190d30",
-  },
-  reelWheel: {
-    width: 44,
-    height: 44,
-    borderRadius: "50%",
-    border: "3px dashed #a855f7",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  openStatusModalBtn: { width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 8px", borderRadius: 8, background: "#130826", border: "1px dashed #581c87", color: "#e9d5ff", fontSize: 10.5, cursor: "pointer" },
+  heartSectionCard: { display: "flex", alignItems: "center", justifyContent: "space-between", border: "1.5px solid #3b1d6e", borderRadius: 14, padding: "8px 10px", marginBottom: 8 },
+  heartToggleBtn: { padding: "6px 10px", borderRadius: 999, border: "1.5px solid", color: "#fff", cursor: "pointer" },
+  tabBar: { display: "flex", gap: 6, marginBottom: 6 },
+  tabBtn: { flex: 1, padding: "7px", borderRadius: 8, background: "#190e30", border: "1px solid #2e1759", color: "#a78bfa", fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 },
+  tabBtnActive: { background: "#3b156b", borderColor: "#a855f7", color: "#ffffff" },
+  unreadDot: { background: "linear-gradient(90deg, #ec4899, #f59e0b)", color: "#fff", fontSize: 8, fontWeight: 800, padding: "1px 5px", borderRadius: 999 },
+  deckContainer: { border: "2px solid #3b1d6e", borderRadius: 16, padding: 10, marginBottom: 8 },
+  cassetteWindow: { display: "flex", justifyContent: "space-around", alignItems: "center", border: "1px solid #4c1d95", borderRadius: 10, padding: "10px 8px", marginBottom: 8, background: "#190d30" },
+  reelWheel: { width: 44, height: 44, borderRadius: "50%", border: "3px dashed #a855f7", display: "flex", alignItems: "center", justifyContent: "center" },
   reelCore: { width: 12, height: 12, borderRadius: "50%", background: "#c084fc" },
   cassetteCenterLabel: { textAlign: "center", padding: "4px 8px", borderRadius: 6, background: "#120824" },
-  playMainBtn: {
-    width: "100%",
-    padding: "10px",
-    borderRadius: 8,
-    border: "none",
-    color: "#fff",
-    fontSize: 11.5,
-    fontWeight: 800,
-    cursor: "pointer",
-  },
-  polaroidFrame: {
-    width: 250,
-    background: "#faf5ff",
-    borderRadius: 8,
-    padding: "6px 6px 12px",
-    boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
-  },
-  polaroidPhotoArea: {
-    position: "relative",
-    width: "100%",
-    height: 150,
-    background: "#1c1033",
-    borderRadius: 4,
-    overflow: "hidden",
-  },
-  scratchCanvas: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    width: "100%",
-    height: "100%",
-    touchAction: "none",
-  },
-  instantRevealBtn: {
-    width: "100%",
-    marginTop: 6,
-    padding: "4px",
-    fontSize: 10,
-    fontWeight: 800,
-    color: "#fff",
-    background: "linear-gradient(90deg, #ec4899, #9333ea)",
-    border: "none",
-    borderRadius: 4,
-    cursor: "pointer",
-  },
-  polaroidCaption: {
-    marginTop: 6,
-    fontFamily: "'Caveat', cursive",
-    fontSize: 18,
-    color: "#2e1065",
-    textAlign: "center",
-  },
-  vaultLauncherBtn: {
-    width: "100%",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    background: "#170d2e",
-    border: "1px solid #4c1d95",
-    borderRadius: 12,
-    padding: "8px 10px",
-    marginBottom: 8,
-    cursor: "pointer",
-  },
-  composerCard: {
-    background: "#190e30",
-    border: "1px solid #3b1d6e",
-    borderRadius: 14,
-    padding: 10,
-  },
-  textInput: {
-    flex: 1,
-    background: "#100821",
-    border: "1px solid #3b1d6e",
-    borderRadius: 8,
-    padding: "6px 8px",
-    color: "#f3e8ff",
-    fontSize: 11,
-    minWidth: 0,
-  },
-  photoUploadBtn: {
-    background: "#261447",
-    border: "1px solid #581c87",
-    borderRadius: 8,
-    padding: "6px 8px",
-    fontSize: 10,
-    fontWeight: 700,
-    color: "#e9d5ff",
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    whiteSpace: "nowrap",
-  },
-  sendPolaroidOnlyBtn: {
-    flex: 1,
-    padding: "10px",
-    borderRadius: 10,
-    background: "#3b156b",
-    border: "1.5px solid #a855f7",
-    color: "#f5d0fe",
-    fontSize: 11,
-    fontWeight: 800,
-    cursor: "pointer",
-  },
-  pttButton: {
-    flex: 1.2,
-    padding: "10px",
-    borderRadius: 10,
-    background: "linear-gradient(135deg, #9333ea, #6b21a8)",
-    border: "1.5px solid #e9d5ff",
-    color: "#ffffff",
-    fontSize: 11,
-    fontWeight: 800,
-    cursor: "pointer",
-  },
-  cancelRecBtn: {
-    padding: "10px 14px",
-    borderRadius: 8,
-    background: "#31102f",
-    border: "1px solid #f43f5e",
-    color: "#fda4af",
-    fontSize: 12,
-    cursor: "pointer",
-  },
-  sendRecBtn: {
-    flex: 1,
-    padding: "10px",
-    borderRadius: 8,
-    background: "linear-gradient(135deg, #ec4899, #9333ea)",
-    border: "none",
-    color: "#fff",
-    fontSize: 11.5,
-    fontWeight: 800,
-    cursor: "pointer",
-  },
+  playMainBtn: { width: "100%", padding: "10px", borderRadius: 8, border: "none", color: "#fff", fontSize: 11.5, fontWeight: 800, cursor: "pointer" },
+  polaroidFrame: { width: 250, background: "#faf5ff", borderRadius: 8, padding: "6px 6px 12px", boxShadow: "0 8px 24px rgba(0,0,0,0.5)" },
+  polaroidPhotoArea: { position: "relative", width: "100%", height: 150, background: "#1c1033", borderRadius: 4, overflow: "hidden" },
+  scratchCanvas: { position: "absolute", top: 0, left: 0, width: "100%", height: "100%", touchAction: "none" },
+  instantRevealBtn: { width: "100%", marginTop: 6, padding: "4px", fontSize: 10, fontWeight: 800, color: "#fff", background: "linear-gradient(90deg, #ec4899, #9333ea)", border: "none", borderRadius: 4, cursor: "pointer" },
+  polaroidCaption: { marginTop: 6, fontFamily: "'Caveat', cursive", fontSize: 18, color: "#2e1065", textAlign: "center" },
+  vaultLauncherBtn: { width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#170d2e", border: "1px solid #4c1d95", borderRadius: 12, padding: "8px 10px", marginBottom: 8, cursor: "pointer" },
+  composerCard: { background: "#190e30", border: "1px solid #3b1d6e", borderRadius: 14, padding: 10 },
+  textInput: { flex: 1, background: "#100821", border: "1px solid #3b1d6e", borderRadius: 8, padding: "6px 8px", color: "#f3e8ff", fontSize: 11, minWidth: 0 },
+  photoUploadBtn: { background: "#261447", border: "1px solid #581c87", borderRadius: 8, padding: "6px 8px", fontSize: 10, fontWeight: 700, color: "#e9d5ff", cursor: "pointer", display: "flex", alignItems: "center", whiteSpace: "nowrap" },
+  sendPolaroidOnlyBtn: { flex: 1, padding: "10px", borderRadius: 10, background: "#3b156b", border: "1.5px solid #a855f7", color: "#f5d0fe", fontSize: 11, fontWeight: 800, cursor: "pointer" },
+  pttButton: { flex: 1.2, padding: "10px", borderRadius: 10, background: "linear-gradient(135deg, #9333ea, #6b21a8)", border: "1.5px solid #e9d5ff", color: "#ffffff", fontSize: 11, fontWeight: 800, cursor: "pointer" },
+  cancelRecBtn: { padding: "10px 14px", borderRadius: 8, background: "#31102f", border: "1px solid #f43f5e", color: "#fda4af", fontSize: 12, cursor: "pointer" },
+  sendRecBtn: { flex: 1, padding: "10px", borderRadius: 8, background: "linear-gradient(135deg, #ec4899, #9333ea)", border: "none", color: "#fff", fontSize: 11.5, fontWeight: 800, cursor: "pointer" },
 
   // BOMB STYLES
   bombRoleBar: { display: "flex", gap: 6, marginBottom: 8 },
-  bombRoleBtn: {
-    flex: 1,
-    padding: "8px",
-    borderRadius: 10,
-    border: "1px solid #3b1d6e",
-    background: "#190e30",
-    color: "#c4b5fd",
-    fontSize: 11,
-    fontWeight: 800,
-    cursor: "pointer",
-  },
+  bombRoleBtn: { flex: 1, padding: "8px", borderRadius: 10, border: "1px solid #3b1d6e", background: "#190e30", color: "#c4b5fd", fontSize: 11, fontWeight: 800, cursor: "pointer" },
   bombRoleDefuserActive: { background: "#3b1130", borderColor: "#f43f5e", color: "#fda4af" },
   bombRoleExpertActive: { background: "#172554", borderColor: "#38bdf8", color: "#bae6fd" },
   bombHudCard: { background: "#0b0514", border: "1.5px solid #4c1d95", borderRadius: 14, padding: 10, marginBottom: 8 },
-  digitalTimer: {
-    fontFamily: "'JetBrains Mono', monospace",
-    fontSize: 24,
-    fontWeight: 800,
-    color: "#f43f5e",
-    letterSpacing: 1,
-  },
-  strikeBox: {
-    width: 22,
-    height: 22,
-    borderRadius: 5,
-    background: "#190d29",
-    border: "1px solid #3b1d6e",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontFamily: "'JetBrains Mono', monospace",
-    fontSize: 11,
-    fontWeight: 800,
-    color: "#3b1d6e",
-  },
+  digitalTimer: { fontFamily: "'JetBrains Mono', monospace", fontSize: 24, fontWeight: 800, color: "#f43f5e", letterSpacing: 1 },
+  strikeBox: { width: 22, height: 22, borderRadius: 5, background: "#190d29", border: "1px solid #3b1d6e", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 800, color: "#3b1d6e" },
   strikeBoxHit: { background: "#4c0519", borderColor: "#f43f5e", color: "#f43f5e" },
-  startBombBtn: {
-    background: "linear-gradient(135deg, #10b981, #059669)",
-    border: "none",
-    color: "#fff",
-    padding: "8px 12px",
-    borderRadius: 8,
-    fontSize: 11,
-    fontWeight: 800,
-    cursor: "pointer",
-  },
-  abortBombBtn: {
-    background: "linear-gradient(135deg, #ef4444, #b91c1c)",
-    border: "none",
-    color: "#fff",
-    padding: "8px 12px",
-    borderRadius: 8,
-    fontSize: 11,
-    fontWeight: 800,
-    cursor: "pointer",
-  },
-  edgePill: {
-    fontFamily: "'JetBrains Mono', monospace",
-    fontSize: 9.5,
-    padding: "3px 6px",
-    borderRadius: 4,
-    background: "#1b1033",
-    border: "1px solid #4c1d95",
-    color: "#e9d5ff",
-  },
+  startBombBtn: { background: "linear-gradient(135deg, #10b981, #059669)", border: "none", color: "#fff", padding: "8px 12px", borderRadius: 8, fontSize: 11, fontWeight: 800, cursor: "pointer" },
+  abortBombBtn: { background: "linear-gradient(135deg, #ef4444, #b91c1c)", border: "none", color: "#fff", padding: "8px 12px", borderRadius: 8, fontSize: 11, fontWeight: 800, cursor: "pointer" },
+  edgePill: { fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, padding: "3px 6px", borderRadius: 4, background: "#1b1033", border: "1px solid #4c1d95", color: "#e9d5ff" },
   singleModuleCard: { background: "#180d2c", border: "2px solid #6b21a8", borderRadius: 16, padding: 12 },
-  diffTag: {
-    fontSize: 9,
-    fontWeight: 800,
-    padding: "2px 6px",
-    borderRadius: 999,
-    background: "rgba(244,63,94,0.2)",
-    color: "#fda4af",
-    border: "1px solid #f43f5e",
-  },
-  telemetryBox: {
-    background: "#0b0514",
-    border: "1px solid #4c1d95",
-    borderRadius: 8,
-    padding: "8px",
-    textAlign: "center",
-    marginBottom: 8,
-  },
-  wireBtn: {
-    width: "100%",
-    height: 32,
-    borderRadius: 999,
-    border: "1.5px solid rgba(255,255,255,0.25)",
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "0 12px",
-    fontFamily: "'JetBrains Mono', monospace",
-    fontSize: 10.5,
-    fontWeight: 800,
-  },
-  choiceBtn: {
-    padding: "10px",
-    borderRadius: 8,
-    background: "#251347",
-    border: "1px solid #6b21a8",
-    color: "#f3e8ff",
-    fontFamily: "'JetBrains Mono', monospace",
-    fontSize: 11.5,
-    fontWeight: 800,
-    cursor: "pointer",
-  },
-  mazeBoard: {
-    display: "grid",
-    gridTemplateColumns: "repeat(5, 30px)",
-    gridTemplateRows: "repeat(5, 30px)",
-    gap: 3,
-    background: "#0d061a",
-    padding: 5,
-    borderRadius: 8,
-    border: "1px solid #3b1d6e",
-  },
-  mazeCell: {
-    width: 30,
-    height: 30,
-    borderRadius: 4,
-    background: "#1a0f30",
-    border: "1px solid #2e1759",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 11,
-  },
-  dpadGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, 32px)",
-    gridTemplateRows: "repeat(3, 30px)",
-    gap: 3,
-  },
-  dpadBtn: {
-    background: "#261447",
-    border: "1px solid #6b21a8",
-    borderRadius: 6,
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: 800,
-    cursor: "pointer",
-  },
+  diffTag: { fontSize: 9, fontWeight: 800, padding: "2px 6px", borderRadius: 999, background: "rgba(244,63,94,0.2)", color: "#fda4af", border: "1px solid #f43f5e" },
+  telemetryBox: { background: "#0b0514", border: "1px solid #4c1d95", borderRadius: 8, padding: "8px", textAlign: "center", marginBottom: 8 },
+  wireBtn: { width: "100%", height: 32, borderRadius: 999, border: "1.5px solid rgba(255,255,255,0.25)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 12px", fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 800 },
+  choiceBtn: { padding: "10px", borderRadius: 8, background: "#251347", border: "1px solid #6b21a8", color: "#f3e8ff", fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5, fontWeight: 800, cursor: "pointer" },
+  mazeBoard: { display: "grid", gridTemplateColumns: "repeat(5, 30px)", gridTemplateRows: "repeat(5, 30px)", gap: 3, background: "#0d061a", padding: 5, borderRadius: 8, border: "1px solid #3b1d6e" },
+  mazeCell: { width: 30, height: 30, borderRadius: 4, background: "#1a0f30", border: "1px solid #2e1759", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11 },
+  dpadGrid: { display: "grid", gridTemplateColumns: "repeat(3, 32px)", gridTemplateRows: "repeat(3, 30px)", gap: 3 },
+  dpadBtn: { background: "#261447", border: "1px solid #6b21a8", borderRadius: 6, color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer" },
   manualContainer: { background: "#100820", border: "1.5px solid #38bdf8", borderRadius: 14, padding: 10 },
-  manualSearchField: {
-    background: "#190e30",
-    border: "1px solid #38bdf8",
-    color: "#fff",
-    borderRadius: 6,
-    padding: "3px 6px",
-    fontSize: 10.5,
-    width: 130,
-  },
+  manualSearchField: { background: "#190e30", border: "1px solid #38bdf8", color: "#fff", borderRadius: 6, padding: "3px 6px", fontSize: 10.5, width: 130 },
   manualCard: { background: "#1a1030", border: "1px solid #3b1d6e", borderRadius: 8, padding: "8px 10px" },
 
   // MODALS
-  modalBackdrop: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    background: "rgba(0,0,0,0.8)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 100,
-    padding: 12,
-  },
+  modalBackdrop: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 12 },
   modalSheet: { width: "100%", maxWidth: 400, background: "#150c29", border: "1.5px solid #581c87", borderRadius: 16, padding: 14, maxHeight: "80vh", overflowY: "auto" },
   closeModalBtn: { background: "transparent", border: "none", color: "#c4b5fd", fontSize: 16, cursor: "pointer" },
   vaultTapeRow: { display: "flex", justifyContent: "space-between", alignItems: "center", background: "#1c1036", padding: "8px 10px", borderRadius: 8 },
