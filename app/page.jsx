@@ -722,6 +722,36 @@ export default function WalkieTalkieApp() {
   const partnerHeartOn = Boolean(stations[partnerStation]?.heart_active);
   const bothThumbsSynced = myThumbDown && partnerThumbDown;
 
+  const toggleHeartSignal = async () => {
+    const nextVal = !Boolean(stations[myStation]?.heart_active);
+    const nowIso = new Date().toISOString();
+    if (nextVal && navigator.vibrate) navigator.vibrate([50, 80, 100]);
+
+    setStations((prev) => ({
+      ...prev,
+      [myStation]: { ...prev[myStation], heart_active: nextVal, heart_updated_at: nowIso },
+    }));
+
+    if (supabase) {
+      await supabase
+        .from("station_status")
+        .update({ heart_active: nextVal, heart_updated_at: nowIso })
+        .eq("station_id", myStation);
+    }
+  };
+
+  const requestNotificationAccess = async () => {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      alert("Add this app to your Home Screen to enable alerts.");
+      return;
+    }
+    const perm = await Notification.requestPermission();
+    setNotifEnabled(perm === "granted");
+    if (perm === "granted") {
+      sendPhoneNotification("12.10 MHz Radio Connected 📻", `You'll be alerted when ${partnerName} transmits!`);
+    }
+  };
+
   useEffect(() => {
     const savedPin = localStorage.getItem("freq1210_pin");
     const savedStation = localStorage.getItem("freq1210_station");
@@ -940,18 +970,6 @@ export default function WalkieTalkieApp() {
       clearInterval(timerInterval);
     };
   }, [myThumbDown, partnerThumbDown]);
-
-  const requestNotificationAccess = async () => {
-    if (typeof window === "undefined" || !("Notification" in window)) {
-      alert("Add this app to your Home Screen to enable alerts.");
-      return;
-    }
-    const perm = await Notification.requestPermission();
-    setNotifEnabled(perm === "granted");
-    if (perm === "granted") {
-      sendPhoneNotification("12.10 MHz Radio Connected 📻", `You'll be alerted when ${partnerName} transmits!`);
-    }
-  };
 
   const activePuzzle = useMemo(() => {
     return PUZZLE_CATALOG.find((p) => p.id === bombSession.puzzleId) || PUZZLE_CATALOG[0];
