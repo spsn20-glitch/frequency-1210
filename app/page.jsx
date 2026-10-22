@@ -45,9 +45,9 @@ const PUZZLE_CATALOG = [
     timerSec: 50,
     type: "wires",
     rules: [
-      "If Serial Number last digit is ODD → Cut WIRE #1.",
-      "Else if there are 2 or more Batteries → Cut WIRE #4.",
-      "Otherwise → Cut WIRE #2.",
+      "If Serial Number last digit is ODD -> Cut WIRE #1.",
+      "Else if there are 2 or more Batteries -> Cut WIRE #4.",
+      "Otherwise -> Cut WIRE #2.",
     ],
     setup: (bomb) => {
       const colors = [
@@ -69,9 +69,9 @@ const PUZZLE_CATALOG = [
     timerSec: 50,
     type: "choice",
     rules: [
-      "SIGNAL: ALPHA → Tap 12.10 MHz",
-      "SIGNAL: BRAVO → If Batteries ≥ 2 tap 14.02 MHz, else tap 19.99 MHz",
-      "SIGNAL: DELTA → Tap 24.07 MHz",
+      "SIGNAL: ALPHA -> Tap 12.10 MHz",
+      "SIGNAL: BRAVO -> If Batteries >= 2 tap 14.02 MHz, else tap 19.99 MHz",
+      "SIGNAL: DELTA -> Tap 24.07 MHz",
     ],
     setup: (bomb) => {
       const sigs = ["SIGNAL: ALPHA", "SIGNAL: BRAVO", "SIGNAL: DELTA"];
@@ -90,9 +90,9 @@ const PUZZLE_CATALOG = [
     timerSec: 50,
     type: "choice",
     rules: [
-      "If LED is LIT and prompt says PINK: HUG → Tap OVERRIDE ALPHA.",
-      "If LED is LIT (other prompt) → Tap OVERRIDE BETA.",
-      "If LED is UNLIT → Tap OVERRIDE GAMMA.",
+      "If LED is LIT and prompt says PINK: HUG -> Tap OVERRIDE ALPHA.",
+      "If LED is LIT (other prompt) -> Tap OVERRIDE BETA.",
+      "If LED is UNLIT -> Tap OVERRIDE GAMMA.",
     ],
     setup: (bomb) => {
       const prompts = ["PINK: HUG", "PURPLE: CALL", "GOLD: WAIT"];
@@ -111,9 +111,9 @@ const PUZZLE_CATALOG = [
     timerSec: 50,
     type: "choice",
     rules: [
-      "MONSOON IN BBI → ODD Serial: CYAN VALVE | EVEN Serial: AMBER VALVE",
-      "FOG IN GRENO → ODD Serial: VIOLET VALVE | EVEN Serial: ROSE VALVE",
-      "HEATWAVE → Always tap CYAN VALVE",
+      "MONSOON IN BBI -> ODD Serial: CYAN VALVE | EVEN Serial: AMBER VALVE",
+      "FOG IN GRENO -> ODD Serial: VIOLET VALVE | EVEN Serial: ROSE VALVE",
+      "HEATWAVE -> Always tap CYAN VALVE",
     ],
     setup: (bomb) => {
       const alerts = ["MONSOON IN BBI", "FOG IN GRENO", "HEATWAVE"];
@@ -132,9 +132,9 @@ const PUZZLE_CATALOG = [
     timerSec: 50,
     type: "wires",
     rules: [
-      "If LED is LIT and Batteries ≥ 2 → Cut TRACK C (ROSE).",
-      "Else if LED is LIT → Cut TRACK A (VIOLET).",
-      "Otherwise → Cut TRACK D (CYAN).",
+      "If LED is LIT and Batteries >= 2 -> Cut TRACK C (ROSE).",
+      "Else if LED is LIT -> Cut TRACK A (VIOLET).",
+      "Otherwise -> Cut TRACK D (CYAN).",
     ],
     setup: (bomb) => {
       const tracks = [
@@ -157,9 +157,9 @@ const PUZZLE_CATALOG = [
     timerSec: 50,
     type: "choice",
     rules: [
-      "MASALA CHAI ☕ → Tap DRONE NORTH",
-      "HOT MOMOS 🥟 → Tap DRONE WEST",
-      "BIRYANI 🍲 → If Batteries == 1 tap DRONE EAST, else tap EXPRESS DROP",
+      "MASALA CHAI ☕ -> Tap DRONE NORTH",
+      "HOT MOMOS 🥟 -> Tap DRONE WEST",
+      "BIRYANI 🍲 -> If Batteries == 1 tap DRONE EAST, else tap EXPRESS DROP",
     ],
     setup: (bomb) => {
       const items = ["MASALA CHAI ☕", "HOT MOMOS 🥟", "BIRYANI 🍲"];
@@ -179,9 +179,9 @@ const PUZZLE_CATALOG = [
     type: "sequence",
     rules: [
       "Find row containing all 4 symbols, press in exact order:",
-      "ROW 1: ⚡ → 🌙 → ⭐ → 🪐",
-      "ROW 2: 🔥 → 💜 → 🎧 → ✈️",
-      "ROW 3: 📻 → 📸 → 🔑 → 💎",
+      "ROW 1: ⚡ -> 🌙 -> ⭐ -> 🪐",
+      "ROW 2: 🔥 -> 💜 -> 🎧 -> ✈️",
+      "ROW 3: 📻 -> 📸 -> 🔑 -> 💎",
     ],
     setup: () => {
       const rows = [
@@ -202,7 +202,7 @@ const PUZZLE_CATALOG = [
     type: "multistage",
     rules: [
       "Stage 1: If sky is CLEAR tap VEC-10, if STORM tap VEC-20.",
-      "Stage 2: If Batteries ≥ 2 tap VEC-30, else tap VEC-40.",
+      "Stage 2: If Batteries >= 2 tap VEC-30, else tap VEC-40.",
       "Stage 3: If Serial is ODD tap VEC-10, else tap VEC-40.",
     ],
     setup: (bomb) => {
@@ -223,9 +223,9 @@ const PUZZLE_CATALOG = [
     timerSec: 60,
     type: "sequence",
     rules: [
-      "ISO-100: DEV → STOP → FIX → WASH",
-      "ISO-400: STOP → DEV → WASH → FIX",
-      "ISO-800: FIX → WASH → DEV → STOP",
+      "ISO-100: DEV -> STOP -> FIX -> WASH",
+      "ISO-400: STOP -> DEV -> WASH -> FIX",
+      "ISO-800: FIX -> WASH -> DEV -> STOP",
     ],
     setup: () => {
       const table = {
@@ -246,9 +246,9 @@ const PUZZLE_CATALOG = [
     timerSec: 60,
     type: "multistage",
     rules: [
-      '"MISSING YOU" → Stage 1: OKAY | Stage 2: SOON | Stage 3: WAIT',
-      '"ON MY WAY" → Stage 1: WAIT | Stage 2: HERE | Stage 3: OKAY',
-      '"CALL ME" → Always tap HERE in every stage.',
+      '"MISSING YOU" -> Stage 1: OKAY | Stage 2: SOON | Stage 3: WAIT',
+      '"ON MY WAY" -> Stage 1: WAIT | Stage 2: HERE | Stage 3: OKAY',
+      '"CALL ME" -> Always tap HERE in every stage.',
     ],
     setup: () => {
       const map = {
@@ -272,9 +272,9 @@ const PUZZLE_CATALOG = [
     timerSec: 60,
     type: "sequence",
     rules: [
-      "60 BPM: P-WAVE → QRS → T-WAVE → SYNC",
-      "72 BPM: QRS → P-WAVE → SYNC → T-WAVE",
-      "96 BPM: SYNC → T-WAVE → QRS → P-WAVE",
+      "60 BPM: P-WAVE -> QRS -> T-WAVE -> SYNC",
+      "72 BPM: QRS -> P-WAVE -> SYNC -> T-WAVE",
+      "96 BPM: SYNC -> T-WAVE -> QRS -> P-WAVE",
     ],
     setup: () => {
       const map = {
@@ -295,9 +295,9 @@ const PUZZLE_CATALOG = [
     timerSec: 60,
     type: "sequence",
     rules: [
-      "CODE: BBI-1 → Press 1 → 2 → 5 → 7",
-      "CODE: GRN-2 → Press 7 → 5 → 2 → 1",
-      "CODE: FRQ-3 → Press 2 → 7 → 1 → 5",
+      "CODE: BBI-1 -> Press 1 -> 2 -> 5 -> 7",
+      "CODE: GRN-2 -> Press 7 -> 5 -> 2 -> 1",
+      "CODE: FRQ-3 -> Press 2 -> 7 -> 1 -> 5",
     ],
     setup: () => {
       const map = {
@@ -319,9 +319,9 @@ const PUZZLE_CATALOG = [
     type: "maze",
     rules: [
       "Guide 🟢 from A1 to 🎯 at E5 without hitting hidden Mines:",
-      "Beacons B1 & D4 → Safe Path: A1→A2→A3→A4→B4→B5→C5→D5→E5",
-      "Beacons A3 & E2 → Safe Path: A1→B1→B2→B3→B4→B5→C5→D5→E5",
-      "Beacons C1 & C5 → Safe Path: A1→B1→C1→C2→C3→C4→C5→D5→E5",
+      "Beacons B1 & D4 -> Safe Path: A1->A2->A3->A4->B4->B5->C5->D5->E5",
+      "Beacons A3 & E2 -> Safe Path: A1->B1->B2->B3->B4->B5->C5->D5->E5",
+      "Beacons C1 & C5 -> Safe Path: A1->B1->C1->C2->C3->C4->C5->D5->E5",
     ],
     setup: () => {
       const bps = [
@@ -342,7 +342,7 @@ const PUZZLE_CATALOG = [
     rules: [
       "Stage 1: If Serial is ODD tap CORE-A, else tap CORE-B.",
       "Stage 2: If LED is LIT tap CORE-C, else tap CORE-D.",
-      "Stage 3: If Batteries ≥ 2 AND Serial is ODD tap CORE-D, else tap CORE-A.",
+      "Stage 3: If Batteries >= 2 AND Serial is ODD tap CORE-D, else tap CORE-A.",
     ],
     setup: (bomb) => {
       const stages = [
@@ -361,10 +361,10 @@ const PUZZLE_CATALOG = [
     timerSec: 70,
     type: "choice",
     rules: [
-      "••• —•—• (SC) → Lock 12.05 MHz",
-      "•——— •— (JA) → Lock 12.10 MHz",
-      "•—•• ••— (LU) → Lock 12.25 MHz",
-      "•••• ••— (HU) → Lock 12.50 MHz",
+      "••• —•—• (SC) -> Lock 12.05 MHz",
+      "•——— •— (JA) -> Lock 12.10 MHz",
+      "•—•• ••— (LU) -> Lock 12.25 MHz",
+      "•••• ••— (HU) -> Lock 12.50 MHz",
     ],
     setup: () => {
       const map = {
@@ -386,10 +386,10 @@ const PUZZLE_CATALOG = [
     timerSec: 70,
     type: "wires",
     rules: [
-      "1. If Serial is ODD and Batteries == 3 → Cut WIRE #6.",
-      "2. Else if LED is LIT and Serial is EVEN → Cut WIRE #5.",
-      "3. Else if Batteries == 1 → Cut WIRE #2.",
-      "4. Otherwise → Cut WIRE #4.",
+      "1. If Serial is ODD and Batteries == 3 -> Cut WIRE #6.",
+      "2. Else if LED is LIT and Serial is EVEN -> Cut WIRE #5.",
+      "3. Else if Batteries == 1 -> Cut WIRE #2.",
+      "4. Otherwise -> Cut WIRE #4.",
     ],
     setup: (bomb) => {
       const list = [
@@ -416,7 +416,7 @@ const PUZZLE_CATALOG = [
     type: "choice",
     rules: [
       "Formula: (Base Voltage × Batteries) + (10 if Serial is ODD, else 5)",
-      "Example: Base 12V, 2 Batteries, ODD Serial → (12 × 2) + 10 = 34.",
+      "Example: Base 12V, 2 Batteries, ODD Serial -> (12 × 2) + 10 = 34.",
     ],
     setup: (bomb) => {
       const bases = [10, 12, 15];
@@ -437,10 +437,10 @@ const PUZZLE_CATALOG = [
     timerSec: 70,
     type: "multistage",
     rules: [
-      "FLASH: PINK → Tap CYAN",
-      "FLASH: CYAN → Tap GOLD",
-      "FLASH: GOLD → Tap VIOLET",
-      "FLASH: VIOLET → Tap PINK",
+      "FLASH: PINK -> Tap CYAN",
+      "FLASH: CYAN -> Tap GOLD",
+      "FLASH: GOLD -> Tap VIOLET",
+      "FLASH: VIOLET -> Tap PINK",
     ],
     setup: () => {
       const map = { PINK: "CYAN", CYAN: "GOLD", GOLD: "VIOLET", VIOLET: "PINK" };
@@ -460,9 +460,9 @@ const PUZZLE_CATALOG = [
     timerSec: 70,
     type: "choice",
     rules: [
-      "LOCK-RED: If LED is LIT → KEY-05 | If LED is UNLIT → KEY-07",
-      "LOCK-BLUE: If Serial is ODD → KEY-10 | If Serial is EVEN → KEY-12",
-      "LOCK-GOLD: If Batteries ≥ 2 → KEY-12 | Else → KEY-05",
+      "LOCK-RED: If LED is LIT -> KEY-05 | If LED is UNLIT -> KEY-07",
+      "LOCK-BLUE: If Serial is ODD -> KEY-10 | If Serial is EVEN -> KEY-12",
+      "LOCK-GOLD: If Batteries >= 2 -> KEY-12 | Else -> KEY-05",
     ],
     setup: (bomb) => {
       const locks = ["LOCK-RED", "LOCK-BLUE", "LOCK-GOLD"];
@@ -482,7 +482,7 @@ const PUZZLE_CATALOG = [
     timerSec: 70,
     type: "multistage",
     rules: [
-      "Step 1 (Power): If Batteries ≥ 2 tap SYNC-A, else tap SYNC-B.",
+      "Step 1 (Power): If Batteries >= 2 tap SYNC-A, else tap SYNC-B.",
       "Step 2 (Signal): If LED is LIT tap SYNC-C, else tap SYNC-D.",
       "Step 3 (Final Core): If Serial is ODD tap SYNC-D, else tap SYNC-A.",
     ],
@@ -936,6 +936,18 @@ export default function WalkieTalkieApp() {
       clearInterval(timerInterval);
     };
   }, [myThumbDown, partnerThumbDown]);
+
+  const requestNotificationAccess = async () => {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      alert("Add this app to your Home Screen to enable alerts.");
+      return;
+    }
+    const perm = await Notification.requestPermission();
+    setNotifEnabled(perm === "granted");
+    if (perm === "granted") {
+      sendPhoneNotification("12.10 MHz Radio Connected 📻", `You'll be alerted when ${partnerName} transmits!`);
+    }
+  };
 
   const activePuzzle = useMemo(() => {
     return PUZZLE_CATALOG.find((p) => p.id === bombSession.puzzleId) || PUZZLE_CATALOG[0];
@@ -1722,5 +1734,5 @@ const styles = {
   stationSelectBtn: { flex: 1, padding: "8px", borderRadius: 8, background: "#1c1033", border: "1px solid #3b1d6e", color: "#c4b5fd", fontSize: 11, fontWeight: 700, cursor: "pointer" },
   stationSelectBtnActive: { background: "#6b21a8", color: "#fff" },
   pinDot: { width: 12, height: 12, borderRadius: "50%", border: "1px solid #a855f7" },
-  keypadBtn: { padding: "10px 0", fontSize: 14, fontWeight: 800, borderRadius: 8, background: "#1e1138", border: "1px solid #3b1d6e", color: "#f3e8ff", cursor: "pointer" },
+  keypadBtn: { padding: "10px 0", fontSize: 14, fontWeight: 800, borderRadius: 8, background: "#1e1138", border: "1.5px solid #3b1d6e", color: "#f3e8ff", cursor: "pointer" },
 };
