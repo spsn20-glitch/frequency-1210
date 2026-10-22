@@ -718,6 +718,10 @@ export default function WalkieTalkieApp() {
   const myName = myStation === "bbi" ? "Sarthak" : "Jaai";
   const partnerName = myStation === "bbi" ? "Jaai" : "Sarthak";
 
+  const myHeartOn = Boolean(stations[myStation]?.heart_active);
+  const partnerHeartOn = Boolean(stations[partnerStation]?.heart_active);
+  const bothThumbsSynced = myThumbDown && partnerThumbDown;
+
   useEffect(() => {
     const savedPin = localStorage.getItem("freq1210_pin");
     const savedStation = localStorage.getItem("freq1210_station");
